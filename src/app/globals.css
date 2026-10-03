@@ -1,0 +1,51 @@
+@import "tailwindcss";
+
+/*
+ * Four tones per theme, split by role: two backgrounds and two text tones.
+ *
+ * Four tones cannot all clear AA against their neighbours — three 4.5:1 steps
+ * need a 91:1 range and the physical maximum is 21:1 — so text only ever sits
+ * on a background: foreground and muted, on background and surface. Those four
+ * pairs are checked in both themes by tests/theme-contrast.test.ts, which reads
+ * this file. Background vs surface (~1.2:1) is decoration only; an edge that
+ * carries meaning gets a muted border, which clears 3:1 on both.
+ */
+:root {
+  color-scheme: light dark;
+  --background: #e4eccf;
+  --surface: #cbd8b0;
+  --muted: #3d5a35;
+  --foreground: #13240f;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0e1a10;
+    --surface: #1b2e1e;
+    --muted: #8fb08a;
+    --foreground: #d4e8c4;
+  }
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-muted: var(--muted);
+  --color-foreground: var(--foreground);
+}
+
+/*
+ * The pixel grid is drawn in the surface tone, so any text over it lands on
+ * either background or surface: pairs the contrast test already covers.
+ * --font-mono is Tailwind's system monospace stack: zero font bytes.
+ * TODO(pablo): a pixel display font for headings, if one passes legibility.
+ */
+body {
+  background-color: var(--background);
+  background-image:
+    linear-gradient(var(--surface) 1px, transparent 1px),
+    linear-gradient(90deg, var(--surface) 1px, transparent 1px);
+  background-size: 4px 4px;
+  color: var(--foreground);
+  font-family: var(--font-mono);
+}
