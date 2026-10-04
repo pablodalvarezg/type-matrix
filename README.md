@@ -121,7 +121,7 @@ Everything has to run on free plans. The accepted cost ceiling for the whole por
 
 PokéAPI asks consumers to cache. The strongest cache is not calling it in production at all.
 
-- `scripts/ingest.ts` downloads what is needed once — species (id, English name, types, base stats), moves (name, type, category, power) and the type chart — with limited concurrency to be polite.
+- `scripts/ingest.ts` downloads what is needed once — species (id, English name, types, base stats, and the damaging moves each one can learn), moves (name, type, category, power) and the type chart — with limited concurrency to be polite. Each species gets the learnset of the most recent mainline game it appears in: Scarlet/Violet first, older games only for species that game left out.
 - It writes `data/snapshot.json`, which is committed. The app reads only that file, and only on the server.
 - Re-running the ingest is a manual decision, and the diff shows exactly what changed.
 - **No sprites are downloaded.** Not even to process them.

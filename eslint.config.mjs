@@ -23,7 +23,9 @@ const eslintConfig = defineConfig([
     files: ["src/**/*.{ts,tsx}"],
     plugins: { boundaries },
     settings: {
-      "boundaries/include": ["src/**/*.{ts,tsx}"],
+      // data/ is included so imports of the snapshot are checked too: outside
+      // include, an import is invisible to every rule below.
+      "boundaries/include": ["src/**/*.{ts,tsx}", "data/**/*.json"],
       "boundaries/elements": [
         { type: "app", pattern: "src/app/**/*", mode: "full" },
         layer("module", "index.ts"),
@@ -34,6 +36,9 @@ const eslintConfig = defineConfig([
         layer("schema", "*.schema.ts"),
         layer("ui", "ui/**/*"),
         { type: "shared", pattern: "src/shared/**/*", mode: "full" },
+        // Every species, so every answer. Only dex/data may read it; anything
+        // else goes through its server-only repository.
+        { type: "snapshot", pattern: "data/*.json", mode: "full" },
       ],
       "import/resolver": {
         typescript: { alwaysTryTypes: true },
@@ -74,6 +79,7 @@ const eslintConfig = defineConfig([
                 "shared",
               ],
             },
+            { from: [["data", { module: "dex" }]], allow: ["snapshot"] },
             // I/O layer: SQL and file reads, mapped onto its own domain types.
             {
               from: ["data"],

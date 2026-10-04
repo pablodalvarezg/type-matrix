@@ -12,7 +12,8 @@
     "check": "next typegen && tsc --noEmit",
     "lint": "eslint",
     "format": "prettier --write .",
-    "test": "vitest run"
+    "test": "vitest run",
+    "ingest": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/ingest.ts"
   },
   "dependencies": {
     "next": "16.3.8",

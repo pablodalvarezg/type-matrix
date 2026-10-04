@@ -99,11 +99,50 @@ src/
 │  ├─ layout.tsx               # html, body, tokens globales
 │  ├─ page.tsx                 # home: los cinco modos, "coming soon"
 │  └─ globals.css              # los tokens del tema, claro y oscuro
-├─ modules/                    # vacío: cada módulo nace con su paso del plan
+├─ modules/
+│  └─ dex/                     # especies, movimientos, tabla de tipos
+│     ├─ domain/               # dex.ts (tipos) · effectiveness.ts
+│     ├─ data/                 # snapshot.repository.ts (server-only)
+│     ├─ dex.schema.ts         # Zod del snapshot, se parsea al cargar
+│     └─ index.ts
 └─ shared/
    └─ config/                  # env.ts (Zod, server-only) · env-schema.ts (puro)
+data/snapshot.json             # generado por scripts/ingest.ts, commiteado
+scripts/ingest.ts              # PokéAPI → snapshot. Manual, nunca en runtime
 tests/                         # tests que no son de un módulo: boundaries, contraste
 ```
+
+### El snapshot
+
+- **Qué trae:** las 1025 especies en su forma por defecto (sin formas regionales,
+  decidido por Pablo el 2026-10-03), los movimientos de daño con poder fijo y la
+  tabla de tipos de 18×18, solo con los pares que no son ×1.
+- **Learnsets fieles a cada especie** (decidido el 2026-10-03). Cada especie trae
+  los movimientos que aprende en el juego más reciente donde aparece:
+  Scarlet/Violet con sus DLC, y si no está, Sword/Shield, BDSP, USUM… en ese
+  orden (lista explícita en el script: los ids de version-group de PokéAPI no
+  son cronológicos). Medido: **292 especies usan un learnset anterior a Gen IX**.
+- **"Existe en Gen IX"** = alguna especie lo aprende en Scarlet/Violet. Eso saca
+  Max Moves, Z-Moves y movimientos eliminados (Hidden Power) sin mantener una lista.
+- **Quedan afuera los movimientos de poder variable:** PokéAPI les da `power: null`
+  (Low Kick, Gyro Ball) o `0` (Hard Press, que el schema atrapó). Por eso 11
+  especies quedan sin movimientos de daño (Ditto, Wobbuffet, Smeargle, Kakuna…):
+  el calculador tiene que contemplarlo.
+- **Una línea por entrada** en el JSON, para que una re-ingesta muestre en el diff
+  qué especies cambiaron. Prettier lo ignora.
+- **Se importa estático** (`@data/snapshot.json`), no se lee con `fs`: el bundler lo
+  mete en la salida del servidor y no hay nada que el output tracing de Vercel
+  pueda perder. Se valida con Zod una vez por proceso.
+- **`server-only` en el repositorio es el guard de la tesis**: el snapshot tiene
+  todas las respuestas. Verificado: un componente cliente que importe
+  `@modules/dex` rompe el build.
+- **El JSON crudo solo lo importa `dex/data`**, por la regla `snapshot` de
+  boundaries: importarlo directo esquiva el `server-only` del repositorio. Hasta
+  que `data/**` entró en `boundaries/include`, un `"use client"` que lo importaba
+  pasaba el lint limpio — un import fuera de `include` no lo ve ninguna regla.
+- **Los otros dominios no importan `dex/domain`.** Las reglas de boundaries lo
+  prohíben: el service le pasa a `battle/domain` el multiplicador como número, o
+  la tabla como dato.
 
 El árbol completo al que se apunta está en el README ("Architecture"). **Es
 adónde van las cosas, no lo que hay el día uno.** Una carpeta se crea cuando
@@ -239,6 +278,7 @@ portfolio y de Atlas. Si descubrís algo del entorno que costó averiguar, anota
 - **Una clase inválida de Tailwind no falla: no existe.** `max-w-75ch` compila a nada, en silencio. Los valores arbitrarios van entre corchetes: `max-w-[75ch]`. Si un estilo "no se aplica", buscá la clase en `.next/static/**/*.css`.
 - **Los heredocs de esta terminal se comen un nivel de backslash, incluso citados.** Cualquier archivo con secuencias de escape se escribe con la herramienta de edición, no por heredoc.
 - **`npm audit` marca vulnerabilidades solo en dependencias de desarrollo** (cadena de ESLint y Vitest 3). `npm audit --omit=dev` da cero. Se resuelven con el salto de major de esas herramientas, como tarea propia.
+- **Node corre `.ts` directo** (type stripping), por eso `scripts/ingest.ts` no necesita `tsx`. Pero no resuelve los aliases de `tsconfig` ni importa `.ts` sin extensión: un script no puede importar código de `src/`. Sin `"type": "module"` en `package.json` avisa `MODULE_TYPELESS_PACKAGE_JSON`; el script npm lo silencia con `--disable-warning` en vez de cambiar el tipo de módulo de todo el repo.
 
 ## Comandos
 
@@ -252,10 +292,10 @@ npm run check     # next typegen && tsc --noEmit
 npm run lint      # eslint, incluye boundaries
 npm run format    # prettier --write
 npm test          # vitest
+npm run ingest    # regenera data/snapshot.json desde PokéAPI (~2.800 llamadas, unos minutos)
 ```
 
-Los que llegan con su paso del plan: `npm run ingest` (2), `npm run db:migrate` (5),
-`npm run test:e2e` (10).
+Los que llegan con su paso del plan: `npm run db:migrate` (5), `npm run test:e2e` (10).
 
 ## Plan
 
@@ -264,8 +304,9 @@ Trabajá solo en el paso actual. No adelantes el siguiente.
 
 - [x] **1. Scaffold.** Next 16, TS strict, Tailwind 4, ESLint con boundaries y su
       test, Prettier, Vitest, `env.ts`, tokens de tema claro y oscuro con el test de AA.
-- [ ] **2. Datos.** ← siguiente
-- [ ] 3. Calculadora · 4. Equipo + **primer deploy** · 5. Jugadores y base ·
+- [x] **2. Datos.** Ingesta, snapshot, módulo `dex`, tabla de tipos con sus tests.
+- [ ] **3. Calculadora.** ← siguiente
+- [ ] 4. Equipo + **primer deploy** · 5. Jugadores y base ·
       6. Ahorcado · 7. Stats & types · 8. Diario y rachas · 9. Leaderboard · 10. Cierre
 
 ## Forma de trabajo
