@@ -83,7 +83,7 @@ Edge case: Shedinja always has 1 HP.
 base = floor(floor(floor(2·Level/5 + 2) · Power · A / D) / 50) + 2
 ```
 
-Then the modifiers, **in this order and with rounding at each step**: critical hit (×1.5), random roll (85–100, `floor(base · roll / 100)`), STAB (×1.5), type effectiveness (product over the defender's types, 0 for immunity), burn (×0.5 on physical moves). Game Freak's rounding rounds half down, not half up (`pokeRound`); getting that wrong gives results that are off by one in some cases. Minimum damage is 1 unless the target is immune.
+Then the modifiers, **in this order and with rounding at each step**: critical hit (×1.5, floored), random roll (85–100, `floor(base · roll / 100)`), STAB (×1.5, `pokeRound`), type effectiveness (product over the defender's types, 0 for immunity, floored), burn (×0.5 on physical moves, floored). Game Freak's rounding rounds half down, not half up (`pokeRound`); getting that wrong gives results that are off by one in some cases. Which step uses which rounding follows the reference calculator. Minimum damage is 1 unless the target is immune.
 
 The output is the full range of 16 rolls, plus min and max as a percentage of the defender's HP.
 

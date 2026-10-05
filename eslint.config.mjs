@@ -31,9 +31,11 @@ const eslintConfig = defineConfig([
         layer("module", "index.ts"),
         layer("domain", "domain/**/*"),
         layer("data", "data/**/*"),
-        layer("data", "*.repository.ts"),
-        layer("service", "*.service.ts"),
-        layer("schema", "*.schema.ts"),
+        // A root-level file's test belongs to its layer, like the tests
+        // inside domain/ and data/ do.
+        layer("data", "*.repository?(.test).ts"),
+        layer("service", "*.service?(.test).ts"),
+        layer("schema", "*.schema?(.test).ts"),
         layer("ui", "ui/**/*"),
         { type: "shared", pattern: "src/shared/**/*", mode: "full" },
         // Every species, so every answer. Only dex/data may read it; anything
@@ -73,6 +75,7 @@ const eslintConfig = defineConfig([
               from: ["service"],
               allow: [
                 "module",
+                ownModule("service"),
                 ownModule("domain"),
                 ownModule("data"),
                 ownModule("schema"),
@@ -91,7 +94,10 @@ const eslintConfig = defineConfig([
               ],
             },
             // Zod for input and output, typed against the domain.
-            { from: ["schema"], allow: [ownModule("domain"), "shared"] },
+            {
+              from: ["schema"],
+              allow: [ownModule("schema"), ownModule("domain"), "shared"],
+            },
             // Presentation: props in, markup out. No data access.
             {
               from: ["ui"],

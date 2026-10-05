@@ -83,6 +83,8 @@ const moveSchema = z.object({
   type: named,
   damage_class: named,
   power: z.number().int().nullable(),
+  // Some newer moves come without meta at all (Population Bomb).
+  meta: z.object({ min_hits: z.number().int().nullable() }).nullish(),
 });
 
 const typeSchema = z.object({
@@ -184,12 +186,27 @@ async function main() {
     get(`move/${move}`, moveSchema),
   );
 
-  // Damaging moves with a fixed power. Variable-power moves need inputs v1
-  // does not model, so they are left out: PokéAPI gives them a null power
-  // (Low Kick, Gyro Ball) or, for Hard Press, a power of 0.
+  // Damaging moves with a fixed power, hit once. Variable-power moves need
+  // inputs v1 does not model, so they are left out: PokéAPI gives them a null
+  // power (Low Kick, Gyro Ball) or, for Hard Press, a power of 0. Multi-hit
+  // moves are left out too: PokéAPI marks them with meta.min_hits.
   // TODO(pablo): variable-power moves.
+  // TODO(pablo): a hand-made list of the moves whose own mechanics v1 does not
+  // model and that PokéAPI does not flag, to leave out here as well:
+  // - multi-hit without meta: Population Bomb, Tachyon Cutter, Twin Beam;
+  // - another stat: Psyshock, Psystrike, Secret Sword (target's Def), Body
+  //   Press (user's Def), Foul Play (target's Atk);
+  // - type or effectiveness rules: Freeze-Dry, Flying Press, Revelation Dance;
+  // - conditional power or boost: Facade, Acrobatics, Collision Course,
+  //   Electro Drift.
+  // Those examples come from the review of step 3; the list is not complete.
   const moves = fetchedMoves
-    .filter((m) => m.damage_class.name !== "status" && (m.power ?? 0) > 0)
+    .filter(
+      (m) =>
+        m.damage_class.name !== "status" &&
+        (m.power ?? 0) > 0 &&
+        m.meta?.min_hits == null,
+    )
     .map((m) => ({
       slug: m.name,
       name: englishName(m.names) ?? m.name,

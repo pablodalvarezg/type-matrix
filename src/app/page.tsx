@@ -1,5 +1,11 @@
+import Link from "next/link";
+
 const modes = [
-  { name: "Battle calculator", blurb: "Damage range for any matchup." },
+  {
+    name: "Battle calculator",
+    blurb: "Damage range for any matchup.",
+    href: "/calculator",
+  },
   { name: "Team builder", blurb: "Shared weaknesses and coverage for six." },
   { name: "Hangman", blurb: "A species name, letter by letter." },
   { name: "Stats & types", blurb: "Guess a species from its numbers." },
@@ -23,9 +29,17 @@ export default function Home() {
             key={mode.name}
             className="flex flex-col gap-1 border border-muted bg-surface p-4"
           >
-            <span className="font-bold">{mode.name}</span>
+            {mode.href ? (
+              <Link href={mode.href} className="font-bold underline">
+                {mode.name}
+              </Link>
+            ) : (
+              <span className="font-bold">{mode.name}</span>
+            )}
             <span className="text-muted">{mode.blurb}</span>
-            <span className="text-sm text-muted">[ coming soon ]</span>
+            {!mode.href && (
+              <span className="text-sm text-muted">[ coming soon ]</span>
+            )}
           </li>
         ))}
       </ul>

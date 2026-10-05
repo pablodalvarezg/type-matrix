@@ -13,3 +13,15 @@ import { parseSnapshot } from "@modules/dex/dex.schema";
  * output tracing to miss on Vercel. Parsed once per server process.
  */
 export const snapshot = parseSnapshot(raw);
+
+// Lookups take what a person types ("Mr. Mime", "mr. mime") or a slug
+// ("mr-mime"): both are unique across the snapshot.
+const key = (text: string) => text.trim().toLowerCase();
+const byKey = <T extends { slug: string; name: string }>(items: T[]) =>
+  new Map(items.flatMap((item) => [[item.slug, item] as const, [key(item.name), item] as const]));
+
+const speciesByKey = byKey(snapshot.species);
+const movesByKey = byKey(snapshot.moves);
+
+export const findSpecies = (query: string) => speciesByKey.get(key(query));
+export const findMove = (query: string) => movesByKey.get(key(query));

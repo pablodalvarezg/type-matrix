@@ -97,16 +97,24 @@ Lo que hay hoy, no solo adónde van las cosas:
 src/
 ├─ app/                        # SOLO routing y composición
 │  ├─ layout.tsx               # html, body, tokens globales
-│  ├─ page.tsx                 # home: los cinco modos, "coming soon"
+│  ├─ page.tsx                 # home: los cinco modos; los que existen, enlazados
+│  ├─ (modes)/calculator/      # page.tsx: lee searchParams, llama al service
 │  └─ globals.css              # los tokens del tema, claro y oscuro
 ├─ modules/
+│  ├─ battle/                  # stats y daño
+│  │  ├─ domain/               # stats.ts · damage.ts, con los vectores del oráculo
+│  │  ├─ ui/                   # CalculatorForm · SideFields · DamageResult · Pill · NumberField
+│  │  ├─ battle.schema.ts      # Zod de los search params del formulario
+│  │  ├─ battle.service.ts     # busca en dex, STAB, efectividad, llama al domain
+│  │  └─ index.ts
 │  └─ dex/                     # especies, movimientos, tabla de tipos
 │     ├─ domain/               # dex.ts (tipos) · effectiveness.ts
-│     ├─ data/                 # snapshot.repository.ts (server-only)
+│     ├─ data/                 # snapshot.repository.ts (server-only), findSpecies/findMove
 │     ├─ dex.schema.ts         # Zod del snapshot, se parsea al cargar
 │     └─ index.ts
 └─ shared/
-   └─ config/                  # env.ts (Zod, server-only) · env-schema.ts (puro)
+   ├─ config/                  # env.ts (Zod, server-only) · env-schema.ts (puro)
+   └─ ui/                      # Combobox (cliente)
 data/snapshot.json             # generado por scripts/ingest.ts, commiteado
 scripts/ingest.ts              # PokéAPI → snapshot. Manual, nunca en runtime
 tests/                         # tests que no son de un módulo: boundaries, contraste
@@ -128,6 +136,14 @@ tests/                         # tests que no son de un módulo: boundaries, con
   (Low Kick, Gyro Ball) o `0` (Hard Press, que el schema atrapó). Por eso 11
   especies quedan sin movimientos de daño (Ditto, Wobbuffet, Smeargle, Kakuna…):
   el calculador tiene que contemplarlo.
+- **También quedan afuera los multigolpe** (decidido el 2026-10-05), por
+  `meta.min_hits` de PokéAPI. No todos lo traen: Population Bomb, Tachyon Cutter
+  y Twin Beam vienen sin `meta`.
+- **`TODO(pablo):` la lista a mano** de los movimientos con mecánica propia que
+  PokéAPI no marca: otra stat (Psyshock, Body Press, Foul Play), reglas de tipo
+  (Freeze-Dry, Flying Press), poder condicional (Facade, Acrobatics)… Los
+  ejemplos están en el comentario de `scripts/ingest.ts`. Hasta que exista, la
+  página de la calculadora avisa que esos números no son exactos.
 - **Una línea por entrada** en el JSON, para que una re-ingesta muestre en el diff
   qué especies cambiaron. Prettier lo ignora.
 - **Se importa estático** (`@data/snapshot.json`), no se lee con `fs`: el bundler lo
@@ -164,6 +180,14 @@ al navegador.
 | `service` | `*.service.ts` | Reglas de juego. No sabe de HTTP ni de la base concreta |
 | `schema` | `*.schema.ts` | Zod de entrada y salida |
 | `ui` | `ui/**` | Recibe props, nunca busca datos |
+
+El test de un archivo de la raíz del módulo (`battle.service.test.ts`) pertenece
+a su capa, igual que los de `domain/` y `data/`. Por eso `service` y `schema`
+pueden importarse a sí mismos dentro del módulo. Sin eso, el test era un archivo
+desconocido para boundaries.
+
+`ui` no puede importar tipos del service: cada componente declara sus props y la
+página, al pasárselas, comprueba que coinciden por tipado estructural.
 
 La dirección es única y no se rompe:
 
@@ -233,15 +257,18 @@ Reglas que no se negocian, porque son la tesis:
 - **Server Components por defecto.** `"use client"` solo donde haya estado, eventos o APIs del navegador, y lo más abajo posible: la directiva es contagiosa hacia abajo.
 - Cuando un componente cliente envuelve contenido estático, pasalo como `children` en vez de importarlo adentro.
 - **Cada `"use client"` del proyecto se justifica en esta tabla.** Si agregás uno,
-  sumalo con su motivo. Hoy no hay ninguno:
+  sumalo con su motivo:
 
   | Archivo | Por qué |
   |---|---|
+  | `src/shared/ui/Combobox.tsx` | Lista de sugerencias estilada (un `<datalist>` no se puede estilar) y teclado ARIA. Es un input con nombre dentro del formulario: sin JS, se envía lo escrito |
 
 - **Nada de widgets nativos donde haya que estilar.** Sin `<select>` ni
   `type="number"`. Con pocas opciones fijas, pills; para números (nivel, IVs, EVs),
   `type="text"` con `inputMode="numeric"`.
 - **El elemento activo no se puede clickear.** La página en la que estás va como `<span aria-current="page">`; la opción ya elegida, `disabled`.
+  Excepción: las pills de un formulario son radios nativos, y un input `disabled`
+  no se envía. Ahí el estado elegido lo da el `checked`.
 - Sin estado global salvo necesidad demostrada.
 - **Tokens semánticos, no valores a mano.** Nada de colores, fuentes, radios ni espaciados hardcodeados en componentes.
 - **`font-variant-numeric: tabular-nums` en toda columna de números** (stats, rangos de daño).
@@ -250,6 +277,16 @@ Reglas que no se negocian, porque son la tesis:
 ## Calidad
 
 - **Tests unitarios obligatorios** para `domain/`: daño, stats, tipos, equipo, puzzle diario, rachas.
+- **Los vectores de daño y stats salen del oráculo** (decidido el 2026-10-04):
+  `@smogon/calc` instalado en un directorio temporal, **nunca como dependencia
+  del repo**, con habilidad inerte (`Pressure`) y sin ítem, porque v1 no los
+  modela. Los números se copian a mano, con la versión de la calculadora y los
+  inputs de cada caso en un comentario, para que se puedan comprobar en
+  calc.pokemonshowdown.com.
+- **El redondeo lo dicta el oráculo, no el README:** crítico, efectividad y
+  quemadura usan `floor`; `pokeRound` solo aparece en el STAB. Con ×1,5 y ÷2 la
+  fracción es 0 o 0,5, donde `floor` y `pokeRound` coinciden: el error que los
+  vectores atrapan es `Math.round` (verificado mutando cada paso).
 - **El test de no-filtración** (paso 6 en adelante): juega una partida completa por
   la API y verifica que **ninguna respuesta anterior a la última** contiene la
   respuesta, ni por id ni por nombre.
@@ -268,6 +305,10 @@ portfolio y de Atlas. Si descubrís algo del entorno que costó averiguar, anota
 - **PowerShell cachea la resolución de comandos.** Después de un `nvm use`, `node -v` puede seguir mostrando la versión vieja en esa terminal. Abrí una nueva para verificar.
 - **`nvm use` cambia la versión de la máquina, no la del directorio.** Hay otro proyecto en Node 20.17. Antes de dar por rota una dependencia, verificá `node -v`.
 - **Git pide elegir cuenta en cada operación si no se fija el usuario.** Ya está fijado en este repo con `git config --local credential.https://github.com.username pablodalvarezg`. Vive en `.git/config`, así que hay que repetirlo si se reclona.
+- **Git tiene `core.autocrlf=true`** y el repo no tiene `.gitattributes`: lo que
+  git escribe al hacer checkout (por ejemplo, volver a `main` después de un merge)
+  queda en CRLF y `prettier --check` lo marca, aunque el contenido no cambió.
+  `TODO(pablo):` un `.gitattributes` con `* text=auto eol=lf` lo resuelve.
 - **Gestor de paquetes: `npm`**, no pnpm. El lockfile es `package-lock.json`.
 - **npm aplana `node_modules`:** un `import` de un paquete no declarado en `package.json` funciona en local y explota en el deploy. Declará toda dependencia que importes, aunque ya esté como transitiva.
 - **npm 11 bloquea los scripts de instalación** salvo los aprobados en `allowScripts`. `unrs-resolver` es el resolver nativo de `eslint-import-resolver-typescript`, y sin su postinstall **las reglas de boundaries pasan en verde sin comprobar nada**. `tests/boundaries.test.ts` es lo que lo detecta.
@@ -305,8 +346,12 @@ Trabajá solo en el paso actual. No adelantes el siguiente.
 - [x] **1. Scaffold.** Next 16, TS strict, Tailwind 4, ESLint con boundaries y su
       test, Prettier, Vitest, `env.ts`, tokens de tema claro y oscuro con el test de AA.
 - [x] **2. Datos.** Ingesta, snapshot, módulo `dex`, tabla de tipos con sus tests.
-- [ ] **3. Calculadora.** ← siguiente
-- [ ] 4. Equipo + **primer deploy** · 5. Jugadores y base ·
+- [x] **3. Calculadora.** Formulario `GET` con `next/form` + combobox propio
+      (opción "A+", decidida por Pablo el 2026-10-04): la URL es todo el estado,
+      se comparte por link y funciona sin JS. Elegir una sugerencia envía el
+      formulario; los números se recalculan con "Calculate".
+- [ ] **4. Equipo + primer deploy.** ← siguiente
+- [ ] 5. Jugadores y base ·
       6. Ahorcado · 7. Stats & types · 8. Diario y rachas · 9. Leaderboard · 10. Cierre
 
 ## Forma de trabajo

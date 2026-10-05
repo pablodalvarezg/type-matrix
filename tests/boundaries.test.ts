@@ -45,6 +45,9 @@ describe("boundaries", () => {
     "src/modules/fixture/fixture.repository.ts",
     "src/modules/fixture/data/fixture-repository.ts",
     "src/modules/fixture/fixture.schema.ts",
+    "src/modules/fixture/fixture.service.test.ts",
+    "src/modules/fixture/fixture.repository.test.ts",
+    "src/modules/fixture/fixture.schema.test.ts",
   ])("recognises %s as a layer that may use shared", async (filePath) => {
     expect(await boundaryErrors(filePath)).toEqual([]);
   });
