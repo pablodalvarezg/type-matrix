@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { snapshot } from "@modules/dex/data/snapshot.repository";
+import {
+  findMove,
+  findSpecies,
+  snapshot,
+} from "@modules/dex/data/snapshot.repository";
 import type { TypeName } from "@modules/dex/domain/dex";
 import { effectiveness } from "@modules/dex/domain/effectiveness";
 
@@ -67,6 +71,12 @@ describe("species", () => {
     expect(bySlug("shedinja")?.stats.hp).toBe(1);
   });
 
+  // battle's computeStats gives 1 HP to any base HP of 1, meaning Shedinja.
+  it("has Shedinja as the only species with base HP 1", () => {
+    const baseHpOne = snapshot.species.filter((s) => s.stats.hp === 1);
+    expect(baseHpOne.map((s) => s.slug)).toEqual(["shedinja"]);
+  });
+
   it("only references moves the snapshot defines", () => {
     const moves = new Set(snapshot.moves.map((m) => m.slug));
     const missing = snapshot.species.flatMap((s) =>
@@ -82,8 +92,37 @@ describe("species", () => {
   });
 });
 
+describe("lookups", () => {
+  it("finds a species by name, in any case, or by slug", () => {
+    expect(findSpecies("Mr. Mime")?.slug).toBe("mr-mime");
+    expect(findSpecies("  mr. mime ")?.slug).toBe("mr-mime");
+    expect(findSpecies("mr-mime")?.slug).toBe("mr-mime");
+    expect(findSpecies("Nidoran♀")?.slug).toBe("nidoran-f");
+    expect(findSpecies("Missingno")).toBeUndefined();
+  });
+
+  it("finds a move by name or slug", () => {
+    expect(findMove("Close Combat")?.slug).toBe("close-combat");
+    expect(findMove("close-combat")?.name).toBe("Close Combat");
+    expect(findMove("Splash")).toBeUndefined();
+  });
+});
+
 describe("moves", () => {
   it("has no moves cut before Gen IX", () => {
     expect(snapshot.moves.map((m) => m.slug)).not.toContain("hidden-power");
+  });
+
+  it("has no multi-hit moves PokéAPI flags", () => {
+    const slugs = snapshot.moves.map((m) => m.slug);
+    for (const multiHit of [
+      "bullet-seed",
+      "double-kick",
+      "triple-axel",
+      "dragon-darts",
+      "surging-strikes",
+    ]) {
+      expect(slugs).not.toContain(multiHit);
+    }
   });
 });
