@@ -6,6 +6,7 @@ import {
   MAX_IV,
   MAX_LEVEL,
 } from "@modules/battle/domain/stats";
+import { param, type SearchParams } from "@shared/search-params";
 
 /*
  * The calculator is a GET form, so its input is the URL's search params.
@@ -13,13 +14,6 @@ import {
  * which makes a Zod issue's path the name of the field it belongs to.
  * A blank or missing field takes the default, like an untouched one.
  */
-export type SearchParams = Record<string, string | string[] | undefined>;
-
-/** The first value of a search param, as a repeated key yields an array. */
-export function param(params: SearchParams, name: string): string | undefined {
-  const value = params[name];
-  return Array.isArray(value) ? value[0] : value;
-}
 
 const blankAsMissing = <T extends z.ZodType>(schema: T) =>
   z.preprocess((value) => (value === "" ? undefined : value), schema);
