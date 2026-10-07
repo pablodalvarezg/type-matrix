@@ -6,6 +6,7 @@ import {
   MAX_IV,
   MAX_LEVEL,
 } from "@modules/battle/domain/stats";
+import { param, textParam, type SearchParams } from "@shared/search-params";
 
 /*
  * The calculator is a GET form, so its input is the URL's search params.
@@ -13,13 +14,6 @@ import {
  * which makes a Zod issue's path the name of the field it belongs to.
  * A blank or missing field takes the default, like an untouched one.
  */
-export type SearchParams = Record<string, string | string[] | undefined>;
-
-/** The first value of a search param, as a repeated key yields an array. */
-export function param(params: SearchParams, name: string): string | undefined {
-  const value = params[name];
-  return Array.isArray(value) ? value[0] : value;
-}
 
 const blankAsMissing = <T extends z.ZodType>(schema: T) =>
   z.preprocess((value) => (value === "" ? undefined : value), schema);
@@ -36,12 +30,6 @@ const whole = (min: number, max: number, fallback: number) =>
       .default(fallback),
   );
 
-const text = z
-  .string()
-  .trim()
-  .optional()
-  .transform((value) => value || undefined);
-
 // An unchecked checkbox is absent from the URL; a checked one has any value.
 const checkbox = z
   .string()
@@ -56,7 +44,7 @@ const spread = <T extends z.ZodType>(stat: T) =>
   z.object({ hp: stat, atk: stat, def: stat, spa: stat, spd: stat, spe: stat });
 
 const side = z.object({
-  species: text,
+  species: textParam,
   level: whole(1, MAX_LEVEL, MAX_LEVEL),
   ivs: spread(whole(0, MAX_IV, MAX_IV)),
   evs: spread(whole(0, MAX_EV, 0)).refine(
@@ -83,7 +71,7 @@ const withRealNature = <T extends typeof side>(schema: T) =>
 const calculatorSchema = z.object({
   attacker: withRealNature(side.extend({ burned: checkbox })),
   defender: withRealNature(side),
-  move: text,
+  move: textParam,
   critical: checkbox,
 });
 

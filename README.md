@@ -95,6 +95,8 @@ The output is the full range of 16 rolls, plus min and max as a percentage of th
 
 - **Shared weaknesses:** for each of the 18 attacking types, how many team members take ×2 or more, and how many resist or are immune. Two members weak to the same type and nobody resisting it: that is the warning.
 - **Offensive coverage (v1):** for each defending type, the best multiplier achievable using the team's **STAB types**. Coverage by chosen moves comes later.
+- **Dual-type defenders:** coverage also counts every two-type combination that some species in the snapshot has, taken from the snapshot rather than a hand-written list, each once (Fire/Flying and Flying/Fire are the same defender). The ones the team's best STAB hits for ×1 or less are listed as gaps, even when each half on its own is covered.
+- **Team rules:** up to six species (`member.1` … `member.6` in the URL), one of each like the Species Clause; a partial team is analysed with the members it has.
 - Type chart: generation 6 onwards (with Fairy). Dual types multiply.
 
 ---
@@ -197,7 +199,7 @@ For each guessed species the server returns: types (exact match, partial match, 
 - **AA contrast is the hard constraint.** The classic four greens fail AA between neighbouring tones. Pick the tones so that every text/background pair passes, and check it when the theme is defined, not at the end.
 - **Feedback never relies on colour alone.** With four tones that would be both inaccessible and ambiguous: use arrows, symbols and text.
 - Tokens as CSS custom properties. No colours, fonts or radii hard-coded in components.
-- No logos, sprites or official art. Any icon is original.
+- No logos, sprites or official art. Any icon is original, except the favicon (`src/app/icon.svg`): a Poké Ball.
 
 ---
 
@@ -276,7 +278,7 @@ Mark each one as `TODO(pablo):` in the code where it applies, use the default, a
 
 ### Don't
 
-- Sprites, official art, logos, or the franchise name as product branding.
+- Sprites, official art, logos, or the franchise name as product branding. The favicon is the one exception.
 - Calls to PokéAPI at runtime.
 - Login, OAuth, or paid services.
 - Microservices, queues, or a separate backend. The route handlers are the backend.

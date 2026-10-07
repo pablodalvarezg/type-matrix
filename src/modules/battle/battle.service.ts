@@ -7,13 +7,10 @@ import {
   type Species,
 } from "@modules/dex";
 
-import {
-  param,
-  parseCalculator,
-  type SearchParams,
-} from "@modules/battle/battle.schema";
+import { parseCalculator } from "@modules/battle/battle.schema";
 import { damage, type DamageResult } from "@modules/battle/domain/damage";
 import { computeStats } from "@modules/battle/domain/stats";
+import { param, type SearchParams } from "@shared/search-params";
 
 /*
  * The calculator has no answer to hide: every number here is public game

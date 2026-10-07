@@ -6,7 +6,11 @@ const modes = [
     blurb: "Damage range for any matchup.",
     href: "/calculator",
   },
-  { name: "Team builder", blurb: "Shared weaknesses and coverage for six." },
+  {
+    name: "Team builder",
+    blurb: "Shared weaknesses and coverage for six.",
+    href: "/team",
+  },
   { name: "Hangman", blurb: "A species name, letter by letter." },
   { name: "Stats & types", blurb: "Guess a species from its numbers." },
   { name: "Daily puzzle", blurb: "One round a day, the same for everyone." },

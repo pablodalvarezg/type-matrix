@@ -20,10 +20,14 @@ const fold = (text: string) =>
     .replace(/\p{Diacritic}/gu, "")
     .toLowerCase();
 
-// Exact match first, so "Mew" lists Mew before Mewtwo.
-function suggest(options: string[], query: string): string[] {
+// Nothing until a letter is typed. Exact match first, so "Mew" lists Mew
+// before Mewtwo.
+function suggest(
+  options: string[],
+  query: string,
+): { shown: string[]; hidden: number } {
   const q = fold(query.trim());
-  if (!q) return options.slice(0, MAX_SHOWN);
+  if (!q) return { shown: [], hidden: 0 };
   const exact: string[] = [];
   const starts: string[] = [];
   const contains: string[] = [];
@@ -33,7 +37,11 @@ function suggest(options: string[], query: string): string[] {
     else if (folded.startsWith(q)) starts.push(option);
     else if (folded.includes(q)) contains.push(option);
   }
-  return [...exact, ...starts, ...contains].slice(0, MAX_SHOWN);
+  const all = [...exact, ...starts, ...contains];
+  return {
+    shown: all.slice(0, MAX_SHOWN),
+    hidden: Math.max(all.length - MAX_SHOWN, 0),
+  };
 }
 
 interface ComboboxProps {
@@ -56,6 +64,7 @@ export function Combobox({
   const id = useId();
   const listId = `${id}-list`;
   const errorId = `${id}-error`;
+  const moreId = `${id}-more`;
   const input = useRef<HTMLInputElement>(null);
   const [value, setValue] = useState(defaultValue);
   const [open, setOpen] = useState(false);
@@ -63,7 +72,9 @@ export function Combobox({
   // they typed instead of silently swapping it for the first suggestion.
   const [active, setActive] = useState(-1);
 
-  const matches = open ? suggest(options, value) : [];
+  const { shown: matches, hidden } = open
+    ? suggest(options, value)
+    : { shown: [], hidden: 0 };
   const expanded = matches.length > 0;
   const optionId = (index: number) => `${id}-option-${index}`;
 
@@ -116,7 +127,11 @@ export function Combobox({
         id={id}
         name={name}
         value={value}
-        placeholder={placeholder}
+        placeholder={
+          placeholder && options.length > 0
+            ? `${placeholder} (start typing)`
+            : placeholder
+        }
         autoComplete="off"
         spellCheck={false}
         role="combobox"
@@ -127,7 +142,10 @@ export function Combobox({
           expanded && active >= 0 ? optionId(active) : undefined
         }
         aria-invalid={error ? true : undefined}
-        aria-describedby={error ? errorId : undefined}
+        aria-describedby={
+          [error && errorId, hidden > 0 && moreId].filter(Boolean).join(" ") ||
+          undefined
+        }
         onChange={(event) => {
           setValue(event.target.value);
           setOpen(true);
@@ -141,34 +159,48 @@ export function Combobox({
         onKeyDown={onKeyDown}
         className="border border-muted bg-background px-2 py-1 placeholder:text-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground"
       />
-      <ul
-        id={listId}
-        role="listbox"
-        aria-label={label}
+      <div
         hidden={!expanded}
-        className="absolute top-full z-10 mt-1 max-h-64 w-full overflow-y-auto border border-muted bg-surface"
+        className="absolute top-full z-10 mt-1 w-full border border-muted bg-surface"
       >
-        {matches.map((option, index) => (
-          <li
-            key={option}
-            id={optionId(index)}
-            role="option"
-            aria-selected={index === active}
-            // mousedown, not click: it runs before the input's blur closes the list.
-            onMouseDown={(event) => {
-              event.preventDefault();
-              choose(option);
-            }}
-            onMouseMove={() => setActive(index)}
-            className="cursor-pointer px-2 py-1 aria-selected:bg-background aria-selected:underline"
+        <ul
+          id={listId}
+          role="listbox"
+          aria-label={label}
+          className="max-h-64 overflow-y-auto"
+        >
+          {matches.map((option, index) => (
+            <li
+              key={option}
+              id={optionId(index)}
+              role="option"
+              aria-selected={index === active}
+              // mousedown, not click: it runs before the input's blur closes the list.
+              onMouseDown={(event) => {
+                event.preventDefault();
+                choose(option);
+              }}
+              onMouseMove={() => setActive(index)}
+              className="cursor-pointer px-2 py-1 aria-selected:bg-background aria-selected:underline"
+            >
+              <span aria-hidden className="inline-block w-3">
+                {index === active ? "›" : ""}
+              </span>
+              {option}
+            </li>
+          ))}
+        </ul>
+        {/* Outside the listbox, which may only hold options; the input's
+            description is what tells a screen reader the list is cut. */}
+        {hidden > 0 && (
+          <p
+            id={moreId}
+            className="border-t border-muted px-2 py-1 text-sm text-muted tabular-nums"
           >
-            <span aria-hidden className="inline-block w-3">
-              {index === active ? "›" : ""}
-            </span>
-            {option}
-          </li>
-        ))}
-      </ul>
+            +{hidden} more, keep typing to narrow it down
+          </p>
+        )}
+      </div>
       {error && (
         <p id={errorId} className="text-sm">
           ✕ {error}

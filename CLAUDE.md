@@ -99,6 +99,7 @@ src/
 │  ├─ layout.tsx               # html, body, tokens globales
 │  ├─ page.tsx                 # home: los cinco modos; los que existen, enlazados
 │  ├─ (modes)/calculator/      # page.tsx: lee searchParams, llama al service
+│  ├─ (modes)/team/            # page.tsx: la misma forma
 │  └─ globals.css              # los tokens del tema, claro y oscuro
 ├─ modules/
 │  ├─ battle/                  # stats y daño
@@ -107,14 +108,21 @@ src/
 │  │  ├─ battle.schema.ts      # Zod de los search params del formulario
 │  │  ├─ battle.service.ts     # busca en dex, STAB, efectividad, llama al domain
 │  │  └─ index.ts
-│  └─ dex/                     # especies, movimientos, tabla de tipos
-│     ├─ domain/               # dex.ts (tipos) · effectiveness.ts
-│     ├─ data/                 # snapshot.repository.ts (server-only), findSpecies/findMove
-│     ├─ dex.schema.ts         # Zod del snapshot, se parsea al cargar
+│  ├─ dex/                     # especies, movimientos, tabla de tipos
+│  │  ├─ domain/               # dex.ts (tipos) · effectiveness.ts
+│  │  ├─ data/                 # snapshot.repository.ts (server-only), findSpecies/findMove
+│  │  ├─ dex.schema.ts         # Zod del snapshot, se parsea al cargar
+│  │  └─ index.ts
+│  └─ team/                    # debilidades compartidas y cobertura STAB
+│     ├─ domain/               # team.ts: recibe la tabla y los tipos como datos, multiplica y cuenta
+│     ├─ ui/                   # TeamForm · TeamReport
+│     ├─ team.schema.ts        # member.1 … member.6
+│     ├─ team.service.ts       # findSpecies, especie repetida, defensores dobles del snapshot
 │     └─ index.ts
 └─ shared/
    ├─ config/                  # env.ts (Zod, server-only) · env-schema.ts (puro)
-   └─ ui/                      # Combobox (cliente)
+   ├─ ui/                      # Combobox (cliente)
+   └─ search-params.ts         # SearchParams · param(), de los formularios GET
 data/snapshot.json             # generado por scripts/ingest.ts, commiteado
 scripts/ingest.ts              # PokéAPI → snapshot. Manual, nunca en runtime
 tests/                         # tests que no son de un módulo: boundaries, contraste
@@ -246,7 +254,8 @@ Reglas que no se negocian, porque son la tesis:
 - Tipografía: el stack monoespaciado del sistema (`--font-mono` de Tailwind), cero
   bytes de fuente. `TODO(pablo):` una fuente pixel para títulos, si pasa legibilidad.
 - **El feedback nunca depende solo del color**: flechas, símbolos y texto.
-- Sin logos, sprites ni arte oficial. Todo ícono es propio.
+- Sin logos, sprites ni arte oficial. Todo ícono es propio, salvo el favicon
+  (`src/app/icon.svg`): una Poké Ball, por decisión de Pablo del 2026-10-07.
 
 ## Convenciones de código
 
@@ -350,9 +359,12 @@ Trabajá solo en el paso actual. No adelantes el siguiente.
       (opción "A+", decidida por Pablo el 2026-10-04): la URL es todo el estado,
       se comparte por link y funciona sin JS. Elegir una sugerencia envía el
       formulario; los números se recalculan con "Calculate".
-- [ ] **4. Equipo + primer deploy.** ← siguiente
-- [ ] 5. Jugadores y base ·
-      6. Ahorcado · 7. Stats & types · 8. Diario y rachas · 9. Leaderboard · 10. Cierre
+- [x] **4. Equipo + primer deploy.** Mismo flujo que la calculadora (`GET`,
+      seis `Combobox`). Cobertura contra los 18 tipos y contra las
+      combinaciones dobles que tiene alguna especie; los huecos dobles, aparte.
+      El deploy lo hace Pablo; `engines.node` `24.x` fija Node 24 en Vercel.
+- [ ] **5. Jugadores y base.** ← siguiente
+- [ ] 6. Ahorcado · 7. Stats & types · 8. Diario y rachas · 9. Leaderboard · 10. Cierre
 
 ## Forma de trabajo
 
@@ -405,6 +417,7 @@ distintas.
 - **Borrar o sobrescribir archivos de Pablo sin avisar**, en particular los `.md`
   que escribió él. Proponé el borrado y dejá que lo haga o lo confirme.
 - Sprites, arte oficial, logos, o el nombre de la franquicia como marca del producto.
+  La única excepción es el favicon (ver "Tema y accesibilidad").
 - Llamadas a PokéAPI en runtime.
 - Login, OAuth o servicios pagos. Todo tiene que caber en planes gratis.
 - Microservicios, backends separados o colas.
