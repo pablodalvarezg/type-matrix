@@ -16,26 +16,37 @@ interface TeamReportProps {
     coverage: CoverageRow[];
     holes: CoverageRow[];
   } | null;
+  errors: Record<string, string>;
 }
 
 const typing = (types: readonly string[]) => types.join("/");
+const count = (n: number, one: string, many: string) =>
+  `${n} ${n === 1 ? one : many}`;
 
-/** Always rendered, so screen readers announce each new analysis. */
-export function TeamReport({ result }: TeamReportProps) {
+function summary({ result, errors }: TeamReportProps): string {
+  if (Object.keys(errors).length > 0) {
+    return "Fix the fields marked ✕ to see the analysis.";
+  }
+  if (!result) return "Add at least one species to the team.";
+  const warnings = result.weaknesses.filter((row) => row.warning).length;
+  return `${count(warnings, "shared weakness", "shared weaknesses")}, ${count(result.holes.length, "dual-type gap", "dual-type gaps")}.`;
+}
+
+export function TeamReport(props: TeamReportProps) {
   return (
     <section
-      aria-live="polite"
       aria-labelledby="report-heading"
       className="flex flex-col gap-6 border border-muted bg-surface p-4"
     >
       <h2 id="report-heading" className="font-bold">
         Analysis
       </h2>
-      {result ? (
-        <Report result={result} />
-      ) : (
-        <p className="text-muted">Add at least one species to the team.</p>
-      )}
+      {/* Always rendered and short: the live region announces each new
+          analysis with one line, not every cell of the tables. */}
+      <p aria-live="polite" className={props.result ? undefined : "text-muted"}>
+        {summary(props)}
+      </p>
+      {props.result && <Report result={props.result} />}
     </section>
   );
 }

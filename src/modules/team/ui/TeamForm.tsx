@@ -8,31 +8,27 @@ interface TeamFormProps {
   speciesNames: string[];
 }
 
-const SLOTS = [1, 2, 3, 4, 5, 6];
-
 /*
  * A GET form like the calculator's: the URL is the team, so a team can be
- * shared by its link. Picking a suggestion submits it.
+ * shared by its link. Picking a suggestion submits it. The slots are the keys
+ * of `values`, which the service fills from the schema's field list.
  */
 export function TeamForm({ values, errors, speciesNames }: TeamFormProps) {
   return (
     <Form action="/team" replace scroll={false} className="flex flex-col gap-4">
       <fieldset className="grid gap-4 border border-muted bg-surface p-4 sm:grid-cols-2 md:grid-cols-3">
         <legend className="px-1 font-bold">Team</legend>
-        {SLOTS.map((slot) => {
-          const name = `member.${slot}`;
-          return (
-            <Combobox
-              key={name}
-              name={name}
-              label={`Member ${slot}`}
-              options={speciesNames}
-              defaultValue={values[name]}
-              error={errors[name]}
-              placeholder="Empty slot"
-            />
-          );
-        })}
+        {Object.keys(values).map((name, index) => (
+          <Combobox
+            key={name}
+            name={name}
+            label={`Member ${index + 1}`}
+            options={speciesNames}
+            defaultValue={values[name]}
+            error={errors[name]}
+            placeholder="Empty slot"
+          />
+        ))}
       </fieldset>
 
       <button

@@ -24,7 +24,7 @@ export default async function TeamPage({ searchParams }: PageProps<"/team">) {
         </p>
       </header>
       <TeamForm {...form} />
-      <TeamReport result={result} />
+      <TeamReport result={result} errors={form.errors} />
     </main>
   );
 }

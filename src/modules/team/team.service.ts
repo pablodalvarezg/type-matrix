@@ -1,4 +1,10 @@
-import { findSpecies, snapshot, TYPE_NAMES, type Species } from "@modules/dex";
+import {
+  effectiveness,
+  findSpecies,
+  snapshot,
+  TYPE_NAMES,
+  type Species,
+} from "@modules/dex";
 
 import {
   analyzeTeam,
@@ -61,7 +67,8 @@ export function runTeam(params: SearchParams): TeamView {
     ...view,
     result: {
       ...analyzeTeam({
-        chart: snapshot.typeChart,
+        multiplier: (attack, defender) =>
+          effectiveness(snapshot.typeChart, attack, defender),
         types: TYPE_NAMES,
         members: members.map((member) => member.types),
         dualDefenders,

@@ -1,13 +1,8 @@
 /*
  * Types are plain strings here: boundaries keep this layer away from
- * dex/domain, so the chart and the list of types come in as data. The shapes
- * match dex's TypeChart and TYPE_NAMES structurally.
+ * dex/domain, so the list of types and the multiplier rule (dex's
+ * effectiveness) come in from the service.
  */
-
-/** Attacking type → defending type → multiplier; a missing pair is ×1. */
-export type TypeChart = Readonly<
-  Record<string, Partial<Record<string, number>>>
->;
 
 /** One or two types: a member's typing, or a defender's. */
 export type Typing = readonly string[];
@@ -38,16 +33,15 @@ export interface TeamAnalysis {
   holes: CoverageRow[];
 }
 
-// Dual types multiply, so any immunity makes the product 0.
-const multiplier = (chart: TypeChart, attack: string, defender: Typing) =>
-  defender.reduce((product, type) => product * (chart[attack]?.[type] ?? 1), 1);
-
 /**
  * The two-type defenders that some species actually has, once each and in
  * the order of `types`: Fire/Flying and Flying/Fire are the same defender.
  */
-export function dualTypes(types: Typing, typings: Typing[]): Typing[] {
-  const key = (typing: Typing) => [...typing].sort().join("/");
+export function dualTypes<T extends string>(
+  types: readonly T[],
+  typings: (readonly T[])[],
+): T[][] {
+  const key = (typing: readonly T[]) => [...typing].sort().join("/");
   const present = new Set(
     typings.filter((typing) => typing.length === 2).map(key),
   );
@@ -59,20 +53,21 @@ export function dualTypes(types: Typing, typings: Typing[]): Typing[] {
   );
 }
 
-export function analyzeTeam({
-  chart,
+export function analyzeTeam<T extends string>({
+  multiplier,
   types,
   members,
   dualDefenders,
 }: {
-  chart: TypeChart;
+  /** Of an attack against a defender's types; 0 for an immunity. */
+  multiplier: (attack: T, defender: readonly T[]) => number;
   /** Every type, in display order: the attackers and the single defenders. */
-  types: Typing;
-  members: Typing[];
-  dualDefenders: Typing[];
+  types: readonly T[];
+  members: (readonly T[])[];
+  dualDefenders: (readonly T[])[];
 }): TeamAnalysis {
   const weaknesses = types.map((attack) => {
-    const taken = members.map((member) => multiplier(chart, attack, member));
+    const taken = members.map((member) => multiplier(attack, member));
     const weak = taken.filter((m) => m >= 2).length;
     const resist = taken.filter((m) => m > 0 && m < 1).length;
     const immune = taken.filter((m) => m === 0).length;
@@ -86,9 +81,9 @@ export function analyzeTeam({
   });
 
   const stab = [...new Set(members.flat())];
-  const cover = (defender: Typing): CoverageRow => ({
+  const cover = (defender: readonly T[]): CoverageRow => ({
     defender,
-    best: Math.max(0, ...stab.map((type) => multiplier(chart, type, defender))),
+    best: Math.max(0, ...stab.map((type) => multiplier(type, defender))),
   });
 
   return {

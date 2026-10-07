@@ -64,6 +64,7 @@ export function Combobox({
   const id = useId();
   const listId = `${id}-list`;
   const errorId = `${id}-error`;
+  const moreId = `${id}-more`;
   const input = useRef<HTMLInputElement>(null);
   const [value, setValue] = useState(defaultValue);
   const [open, setOpen] = useState(false);
@@ -141,7 +142,10 @@ export function Combobox({
           expanded && active >= 0 ? optionId(active) : undefined
         }
         aria-invalid={error ? true : undefined}
-        aria-describedby={error ? errorId : undefined}
+        aria-describedby={
+          [error && errorId, hidden > 0 && moreId].filter(Boolean).join(" ") ||
+          undefined
+        }
         onChange={(event) => {
           setValue(event.target.value);
           setOpen(true);
@@ -186,9 +190,13 @@ export function Combobox({
             </li>
           ))}
         </ul>
-        {/* Outside the listbox, which may only hold options. */}
+        {/* Outside the listbox, which may only hold options; the input's
+            description is what tells a screen reader the list is cut. */}
         {hidden > 0 && (
-          <p className="border-t border-muted px-2 py-1 text-sm text-muted tabular-nums">
+          <p
+            id={moreId}
+            className="border-t border-muted px-2 py-1 text-sm text-muted tabular-nums"
+          >
             +{hidden} more, keep typing to narrow it down
           </p>
         )}

@@ -5,7 +5,8 @@ import { analyzeTeam, dualTypes, type Typing } from "@modules/team/domain/team";
 /*
  * The type chart and type order, copied verbatim from data/snapshot.json
  * (typeChart, and TYPE_NAMES in dex/domain/dex.ts). This layer may not import
- * either, so every multiplier below can be checked against these lines.
+ * either, nor dex's effectiveness, so every multiplier below can be checked
+ * against these lines. The service passes the real effectiveness.
  */
 // prettier-ignore
 const TYPES = [
@@ -14,7 +15,7 @@ const TYPES = [
   "dark", "fairy",
 ];
 // prettier-ignore
-const CHART = {
+const CHART: Record<string, Partial<Record<string, number>>> = {
   normal: { ghost: 0, rock: 0.5, steel: 0.5 },
   fighting: { bug: 0.5, dark: 2, fairy: 0.5, flying: 0.5, ghost: 0, ice: 2, normal: 2, poison: 0.5, psychic: 0.5, rock: 2, steel: 2 },
   flying: { bug: 2, electric: 0.5, fighting: 2, grass: 2, rock: 0.5, steel: 0.5 },
@@ -35,8 +36,12 @@ const CHART = {
   fairy: { dark: 2, dragon: 2, fighting: 2, fire: 0.5, poison: 0.5, steel: 0.5 },
 };
 
+// The same product as dex's effectiveness: dual types multiply.
+const multiplier = (attack: string, defender: Typing) =>
+  defender.reduce((product, type) => product * (CHART[attack]?.[type] ?? 1), 1);
+
 const analyze = (members: Typing[], dualDefenders: Typing[] = []) =>
-  analyzeTeam({ chart: CHART, types: TYPES, members, dualDefenders });
+  analyzeTeam({ multiplier, types: TYPES, members, dualDefenders });
 
 const row = (members: Typing[], attack: string) =>
   analyze(members).weaknesses.find((w) => w.attack === attack);
