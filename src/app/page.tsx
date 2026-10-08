@@ -16,7 +16,11 @@ const modes = [
     blurb: "A species name, letter by letter.",
     href: "/hangman",
   },
-  { name: "Stats & types", blurb: "Guess a species from its numbers." },
+  {
+    name: "Stats & types",
+    blurb: "Guess a species from its numbers.",
+    href: "/guess",
+  },
   { name: "Daily puzzle", blurb: "One round a day, the same for everyone." },
 ];
 

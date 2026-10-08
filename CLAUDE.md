@@ -103,8 +103,10 @@ src/
 │  ├─ (modes)/calculator/      # page.tsx: lee searchParams, llama al service
 │  ├─ (modes)/team/            # page.tsx: la misma forma
 │  ├─ (modes)/hangman/         # page.tsx: botón de partida nueva · [id]/page.tsx: el tablero
+│  ├─ (modes)/guess/           # Stats & types, la misma forma que hangman
 │  ├─ api/players/nickname/    # route.ts: POST, emite la cookie y guarda el nickname
 │  ├─ api/hangman/games/       # route.ts: POST crea la partida · [id]/guesses/route.ts: POST una letra
+│  ├─ api/guess/games/         # la misma forma; el intento es `{ species }`, nombre o slug
 │  └─ globals.css              # los tokens del tema, claro y oscuro
 ├─ modules/
 │  ├─ battle/                  # stats y daño
@@ -118,9 +120,16 @@ src/
 │  │  ├─ data/                 # snapshot.repository.ts (server-only), findSpecies/findMove
 │  │  ├─ dex.schema.ts         # Zod del snapshot, se parsea al cargar
 │  │  └─ index.ts
+│  ├─ guess/                   # Stats & types free play
+│  │  ├─ domain/               # guess.ts: veredicto de tipos, flechas por stat, estado, respuesta al terminar
+│  │  ├─ ui/                   # GuessBoard (cliente)
+│  │  ├─ guess.schema.ts       # `{ species }` · el id de partida
+│  │  ├─ guess.repository.ts   # como el de hangman: `guesses text[]`, concurrencia por cantidad
+│  │  ├─ guess.service.ts      # elige la especie, resuelve el nombre, devuelve la vista pública
+│  │  └─ index.ts
 │  ├─ hangman/                 # ahorcado free play
 │  │  ├─ domain/               # hangman.ts: máscara con acentos plegados, fallos, estado, respuesta al terminar
-│  │  ├─ ui/                   # HangmanBoard · NewGameButton (los dos cliente)
+│  │  ├─ ui/                   # HangmanBoard (cliente)
 │  │  ├─ hangman.schema.ts     # una letra a–z · el id de partida
 │  │  ├─ hangman.repository.ts # crear (y el jugador), buscar, agregar letra con concurrencia optimista
 │  │  ├─ hangman.service.ts    # elige la especie, aplica reglas, devuelve la vista pública
@@ -141,7 +150,7 @@ src/
    ├─ config/                  # env.ts (Zod, server-only) · env-schema.ts (puro)
    ├─ db/                      # client.ts: neon() sobre HTTP (server-only)
    ├─ http/                    # require-json.ts: el 415 de toda ruta que emite la cookie
-   ├─ ui/                      # Combobox (cliente)
+   ├─ ui/                      # Combobox · NewGameButton (cliente)
    └─ search-params.ts         # SearchParams · param(), de los formularios GET
 data/snapshot.json             # generado por scripts/ingest.ts, commiteado
 db/migrations/                 # NNNN_nombre.sql, se aplican en orden y una vez
@@ -324,7 +333,8 @@ Reglas que no se negocian, porque son la tesis:
   |---|---|
   | `src/shared/ui/Combobox.tsx` | Lista de sugerencias estilada (un `<datalist>` no se puede estilar) y teclado ARIA. Es un input con nombre dentro del formulario: sin JS, se envía lo escrito |
   | `src/modules/hangman/ui/HangmanBoard.tsx` | Cada letra es un `POST` JSON y la respuesta reemplaza la partida. Es la excepción a "`ui` nunca busca datos": manda un intento, no lee datos, y solo tiene lo que el servidor devolvió. Sin JS no se juega (decidido por Pablo el 2026-10-07) |
-  | `src/modules/hangman/ui/NewGameButton.tsx` | `POST` que crea la partida y navega a su id. La misma excepción |
+  | `src/modules/guess/ui/GuessBoard.tsx` | La misma excepción que `HangmanBoard`: cada especie es un `POST` JSON. Lleva el `Combobox` con los 1025 nombres, que son el espacio de búsqueda |
+  | `src/shared/ui/NewGameButton.tsx` | `POST` que crea la partida de un modo y navega a su id. La misma excepción, compartida por los dos modos |
 
 - **Nada de widgets nativos donde haya que estilar.** Sin `<select>` ni
   `type="number"`. Con pocas opciones fijas, pills; para números (nivel, IVs, EVs),
@@ -356,8 +366,14 @@ Reglas que no se negocian, porque son la tesis:
   la API y verifica que **ninguna respuesta anterior a la última** contiene la
   respuesta, ni por id ni por nombre. Es `tests/no-leak.test.ts`: llama a los
   route handlers con el repositorio en memoria, y revisa también la vista que
-  recibe la página. Verificado que muerde: con la respuesta siempre en la vista,
-  los cuatro casos de partida fallan.
+  recibe la página. Verificado que muerde, en los dos modos: con la respuesta
+  siempre en la vista, los cuatro casos de partida de ese modo fallan. En
+  Stats & types los números dentro de `stats` no se comparan con el número de
+  la Pokédex: las stats de un intento pueden coincidir con él por azar. En
+  cambio, la línea de stats de la respuesta no puede aparecer en ningún
+  objeto, con cualquier clave: es la respuesta sin el nombre (verificado que
+  muerde). Los intentos del test no comparten esa línea con la respuesta, y
+  el test lo comprueba: hay 15 grupos de especies con las mismas stats.
 - **Smoke e2e** (Playwright): uno por modo.
 - **Accesibilidad:** HTML semántico, foco visible, contraste AA (ya testeado), navegación por teclado.
 - **Responsive desde 360 px.** Lighthouse ≥ 90 en mobile, medido sobre el deploy.
@@ -427,8 +443,13 @@ Trabajá solo en el paso actual. No adelantes el siguiente.
       en la primera acción que guarda algo, `POST /api/players/nickname`.
 - [x] **6. Ahorcado.** Free play con las 1025 especies, 6 fallos, partida del
       jugador de la cookie, API JSON y tablero cliente, test de no-filtración.
-- [ ] **7. Stats & types.** ← siguiente
-- [ ] 8. Diario y rachas · 9. Leaderboard · 10. Cierre
+- [x] **7. Stats & types.** Free play, 8 intentos. Un veredicto de tipos por
+      intento (exacto, uno compartido, ninguno, sin importar el orden), una
+      flecha por stat base, la especie repetida se rechaza sin gastar, y al
+      terminar se muestra la respuesta con tipos y stats (decidido por Pablo el
+      2026-10-08). El test de no-filtración juega también este modo.
+- [ ] **8. Diario y rachas.** ← siguiente
+- [ ] 9. Leaderboard · 10. Cierre
 
 ## Forma de trabajo
 

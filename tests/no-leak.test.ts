@@ -1,8 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 
+import { POST as statsGuessRoute } from "@app/api/guess/games/[id]/guesses/route";
+import { POST as statsStartRoute } from "@app/api/guess/games/route";
 import { POST as guessRoute } from "@app/api/hangman/games/[id]/guesses/route";
 import { POST as startRoute } from "@app/api/hangman/games/route";
-import { findSpecies, snapshot } from "@modules/dex";
+import { findSpecies, snapshot, type Species } from "@modules/dex";
+import { getGame as getStatsGame } from "@modules/guess";
 import { getGame } from "@modules/hangman";
 
 /*
@@ -18,6 +21,13 @@ const games = vi.hoisted(
     new Map<
       string,
       { playerId: string; speciesSlug: string; letters: string }
+    >(),
+);
+const statsGames = vi.hoisted(
+  () =>
+    new Map<
+      string,
+      { playerId: string; speciesSlug: string; guesses: string[] }
     >(),
 );
 const pick = vi.hoisted(() => ({ index: 0 }));
@@ -62,6 +72,32 @@ vi.mock("@modules/hangman/hangman.repository", () => ({
     return true;
   },
 }));
+vi.mock("@modules/guess/guess.repository", () => ({
+  createGame: async (playerId: string, speciesSlug: string) => {
+    const id = crypto.randomUUID();
+    statsGames.set(id, { playerId, speciesSlug, guesses: [] });
+    return id;
+  },
+  findGame: async (id: string, playerId: string) => {
+    const game = statsGames.get(id);
+    return game?.playerId === playerId
+      ? { ...game, guesses: [...game.guesses] }
+      : undefined;
+  },
+  addGuess: async (
+    id: string,
+    playerId: string,
+    count: number,
+    slug: string,
+  ) => {
+    const game = statsGames.get(id);
+    if (game?.playerId !== playerId || game.guesses.length !== count) {
+      return false;
+    }
+    game.guesses.push(slug);
+    return true;
+  },
+}));
 
 const post = (body?: object, type = "application/json") =>
   new Request("http://localhost/api", {
@@ -70,12 +106,82 @@ const post = (body?: object, type = "application/json") =>
     body: body && JSON.stringify(body),
   });
 
+// Stats & types shows the guesses' base stats, any of which may equal the
+// answer's dex number by chance: those are skipped, every other number is not.
 const numbersIn = (value: unknown): number[] =>
   typeof value === "number"
     ? [value]
     : value && typeof value === "object"
-      ? Object.values(value).flatMap(numbersIn)
+      ? Object.entries(value).flatMap(([key, inner]) =>
+          key === "stats" ? [] : numbersIn(inner),
+        )
       : [];
+
+const objectsIn = (value: unknown): object[] =>
+  value && typeof value === "object"
+    ? [value, ...Object.values(value).flatMap(objectsIn)]
+    : [];
+
+function expectNoAnswer(responses: unknown[], species: Species) {
+  for (const response of responses) {
+    const text = JSON.stringify(response).toLowerCase();
+    expect(response).not.toHaveProperty("answer");
+    expect(text).not.toContain(species.name.toLowerCase());
+    expect(text).not.toContain(species.slug);
+    expect(numbersIn(response)).not.toContain(species.id);
+    // The stat line alone, under any key, is the answer without its name.
+    // The guesses below never share it (checked where they are picked).
+    expect(objectsIn(response)).not.toContainEqual(species.stats);
+  }
+}
+
+const modes = {
+  hangman: { start: startRoute, guess: guessRoute, view: getGame },
+  stats: {
+    start: statsStartRoute,
+    guess: statsGuessRoute,
+    view: getStatsGame,
+  },
+};
+
+const playerOf = () => jar.get("player")!.split(".")[0]!;
+
+/** Plays `bodies` in order until the game ends, collecting every response. */
+async function play(
+  mode: keyof typeof modes,
+  slug: string,
+  bodies: (answer: Species) => object[],
+) {
+  const { start, guess, view } = modes[mode];
+  const species = findSpecies(slug)!;
+  pick.index = snapshot.species.indexOf(species);
+  jar.clear();
+
+  const responses: unknown[] = [];
+  const game = (await (await start(post())).json()) as { id: string };
+  responses.push(game);
+
+  for (const body of bodies(species)) {
+    const response = await guess(post(body), {
+      params: Promise.resolve({ id: game.id }),
+    });
+    expect(response.status).toBe(200);
+    const next = (await response.json()) as { status: string };
+    responses.push(next);
+    if (next.status !== "playing") break;
+
+    // What the page would hand the board mid-game: the same view.
+    responses.push(await view(game.id, playerOf()));
+  }
+  return { species, game, responses };
+}
+
+const GAMES = [
+  ["mr-mime", "won"],
+  ["mr-mime", "lost"],
+  ["flabebe", "won"],
+  ["type-null", "lost"],
+] as const;
 
 const fold = (text: string) =>
   text.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
@@ -83,63 +189,36 @@ const lettersOf = (name: string) => [
   ...new Set(fold(name).replace(/[^a-z]/g, "")),
 ];
 
-async function play(slug: string, outcome: "won" | "lost") {
-  const species = findSpecies(slug)!;
-  pick.index = snapshot.species.indexOf(species);
-  jar.clear();
+const letters = (outcome: "won" | "lost") => (answer: Species) =>
+  (outcome === "won"
+    ? lettersOf(answer.name)
+    : [..."abcdefghijklmnopqrstuvwxyz"].filter(
+        (letter) => !lettersOf(answer.name).includes(letter),
+      )
+  ).map((letter) => ({ letter }));
 
-  const responses: unknown[] = [];
-  const started = await startRoute(post());
-  const game = (await started.json()) as { id: string };
-  responses.push(game);
-
-  const letters =
-    outcome === "won"
-      ? lettersOf(species.name)
-      : [..."abcdefghijklmnopqrstuvwxyz"].filter(
-          (letter) => !lettersOf(species.name).includes(letter),
-        );
-  for (const letter of letters) {
-    const response = await guessRoute(post({ letter }), {
-      params: Promise.resolve({ id: game.id }),
-    });
-    expect(response.status).toBe(200);
-    const body = (await response.json()) as { status: string };
-    responses.push(body);
-    if (body.status !== "playing") break;
-
-    // What the page would hand the board mid-game: the same view.
-    const playerId = jar.get("player")!.split(".")[0]!;
-    responses.push(await getGame(game.id, playerId));
-  }
-  return { species, game, responses };
-}
-
-describe("no answer before the game is over", () => {
-  it.each([
-    ["mr-mime", "won"],
-    ["mr-mime", "lost"],
-    ["flabebe", "won"],
-    ["type-null", "lost"],
-  ] as const)("%s, %s", async (slug, outcome) => {
-    const { species, responses } = await play(slug, outcome);
-    const last = responses.at(-1);
+describe("Hangman: no answer before the game is over", () => {
+  it.each(GAMES)("%s, %s", async (slug, outcome) => {
+    const { species, responses } = await play(
+      "hangman",
+      slug,
+      letters(outcome),
+    );
     const before = responses.slice(0, -1);
 
-    expect(last).toMatchObject({ status: outcome, answer: species.name });
+    expect(responses.at(-1)).toMatchObject({
+      status: outcome,
+      answer: species.name,
+    });
+    expectNoAnswer(before, species);
     for (const response of before) {
-      const text = JSON.stringify(response).toLowerCase();
-      expect(response).not.toHaveProperty("answer");
       // The mask is an array, so the name never appears in it as one string.
       expect((response as { mask: unknown[] }).mask).toContain(null);
-      expect(text).not.toContain(species.name.toLowerCase());
-      expect(text).not.toContain(species.slug);
-      expect(numbersIn(response)).not.toContain(species.id);
     }
   });
 
   it("hides a game from any other player", async () => {
-    const { game } = await play("mr-mime", "won");
+    const { game } = await play("hangman", "mr-mime", letters("won"));
     jar.clear();
     const response = await guessRoute(post({ letter: "a" }), {
       params: Promise.resolve({ id: game.id }),
@@ -152,5 +231,56 @@ describe("no answer before the game is over", () => {
     const response = await startRoute(post(undefined, "text/plain"));
     expect(response.status).toBe(415);
     expect(jar.size).toBe(0);
+  });
+});
+
+// The first species in dex order. A wrong guess shows its own name and
+// stats, so none may contain an answer's name ("Mewtwo" contains "Mew") or
+// share its stat line.
+const WRONG = snapshot.species.slice(0, 9);
+
+const guesses = (outcome: "won" | "lost") => (answer: Species) => {
+  const misses = WRONG.filter((guess) => guess !== answer);
+  expect(misses.map((guess) => guess.stats)).not.toContainEqual(answer.stats);
+  return (outcome === "won" ? [...misses.slice(0, 3), answer] : misses).map(
+    (guess) => ({ species: guess.name }),
+  );
+};
+
+describe("Stats & types: no answer before the game is over", () => {
+  it.each(GAMES)("%s, %s", async (slug, outcome) => {
+    const { species: answer, responses } = await play(
+      "stats",
+      slug,
+      guesses(outcome),
+    );
+
+    expect(responses.at(-1)).toMatchObject({
+      status: outcome,
+      answer: { name: answer.name, stats: answer.stats },
+    });
+    expectNoAnswer(responses.slice(0, -1), answer);
+  });
+
+  it("refuses an unknown species without spending a guess", async () => {
+    jar.clear();
+    const started = await statsStartRoute(post());
+    const game = (await started.json()) as { id: string; remaining: number };
+    const response = await statsGuessRoute(post({ species: "Missingno" }), {
+      params: Promise.resolve({ id: game.id }),
+    });
+    expect(response.status).toBe(400);
+    expect(await getStatsGame(game.id, playerOf())).toMatchObject({
+      remaining: game.remaining,
+    });
+  });
+
+  it("hides a game from any other player", async () => {
+    const { game } = await play("stats", "mr-mime", guesses("won"));
+    jar.clear();
+    const response = await statsGuessRoute(post({ species: "Bulbasaur" }), {
+      params: Promise.resolve({ id: game.id }),
+    });
+    expect(response.status).toBe(404);
   });
 });
