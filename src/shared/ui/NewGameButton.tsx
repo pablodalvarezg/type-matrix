@@ -3,8 +3,17 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
-/** Starts a game on the server and opens it. The game id is all it gets back. */
-export function NewGameButton({ label }: { label: string }) {
+/**
+ * Starts a game of `mode` on the server and opens it. The game id is all it
+ * gets back. Every mode has `/api/<mode>/games` and a page at `/<mode>/<id>`.
+ */
+export function NewGameButton({
+  mode,
+  label,
+}: {
+  mode: "hangman" | "guess";
+  label: string;
+}) {
   const router = useRouter();
   const [pending, setPending] = useState(false);
   const [failed, setFailed] = useState(false);
@@ -12,7 +21,7 @@ export function NewGameButton({ label }: { label: string }) {
   async function start() {
     setPending(true);
     setFailed(false);
-    const response = await fetch("/api/hangman/games", {
+    const response = await fetch(`/api/${mode}/games`, {
       method: "POST",
       headers: { "content-type": "application/json" },
     }).catch(() => null);
@@ -22,7 +31,7 @@ export function NewGameButton({ label }: { label: string }) {
       setFailed(true);
       return;
     }
-    router.push(`/hangman/${(game as { id: string }).id}`);
+    router.push(`/${mode}/${(game as { id: string }).id}`);
   }
 
   return (

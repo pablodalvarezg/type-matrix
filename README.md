@@ -196,6 +196,12 @@ Names like `Mr. Mime`, `Farfetch'd`, `Type: Null`, `Nidoran♀` and `Flabébé`.
 
 For each guessed species the server returns: types (exact match, partial match, none), and each base stat (higher, lower, equal). Guesses are capped per game. The list of species names for autocomplete can travel to the client: it is the guess space, not the answer.
 
+- The answer is any of the 1025 species in the snapshot. Eight guesses per game.
+- Types get one verdict per guess: **exact** (the same types, in any order), **partial** (at least one shared) or **none**. Each of the six base stats gets an arrow: the answer's is higher, lower or equal.
+- A species already guessed, or a name that is not a species, is refused and costs nothing. Ownership and concurrent guesses work as in Hangman.
+- Once the game is over, the answer comes back in full: name, types and base stats.
+- The API is `POST /api/guess/games` and `POST /api/guess/games/{id}/guesses` with `{ "species": "Mr. Mime" }` (a name or slug). Each response is the public view of the game: one row per guess with its feedback, the guesses left and the status, plus the answer once it is over.
+
 ---
 
 ## Visual identity

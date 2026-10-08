@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
 import type { Progress } from "@modules/hangman/domain/hangman";
-import { NewGameButton } from "@modules/hangman/ui/NewGameButton";
+import { NewGameButton } from "@shared/ui/NewGameButton";
 
 type Game = Progress & { id: string };
 
@@ -90,7 +90,7 @@ export function HangmanBoard({ initial }: { initial: Game }) {
       </p>
 
       {over ? (
-        <NewGameButton label="Play again" />
+        <NewGameButton mode="hangman" label="Play again" />
       ) : (
         <div className="grid grid-cols-7 gap-2 sm:grid-cols-9">
           {ALPHABET.map((letter) => {

@@ -4,24 +4,25 @@ import Link from "next/link";
 import { NewGameButton } from "@shared/ui/NewGameButton";
 
 export const metadata: Metadata = {
-  title: "Hangman · Type Matrix",
-  description: "Guess a species name, letter by letter.",
+  title: "Stats & types · Type Matrix",
+  description: "Guess a species from its types and base stats.",
 };
 
-export default function HangmanPage() {
+export default function GuessPage() {
   return (
     <main className="mx-auto flex max-w-2xl flex-col gap-6 px-4 py-8">
       <header className="flex flex-col gap-2">
         <Link href="/" className="self-start text-sm text-muted underline">
           ← Type Matrix
         </Link>
-        <h1 className="text-3xl font-bold">Hangman</h1>
+        <h1 className="text-3xl font-bold">Stats &amp; types</h1>
         <p className="text-muted">
-          A species name, letter by letter. Accents don&apos;t matter, and
-          anything that isn&apos;t a letter is shown from the start.
+          Name a species. Each guess tells you whether its types match the
+          answer&apos;s, and whether each base stat of the answer is higher,
+          lower or equal.
         </p>
       </header>
-      <NewGameButton mode="hangman" label="New game" />
+      <NewGameButton mode="guess" label="New game" />
     </main>
   );
 }
