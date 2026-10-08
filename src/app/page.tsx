@@ -11,7 +11,11 @@ const modes = [
     blurb: "Shared weaknesses and coverage for six.",
     href: "/team",
   },
-  { name: "Hangman", blurb: "A species name, letter by letter." },
+  {
+    name: "Hangman",
+    blurb: "A species name, letter by letter.",
+    href: "/hangman",
+  },
   { name: "Stats & types", blurb: "Guess a species from its numbers." },
   { name: "Daily puzzle", blurb: "One round a day, the same for everyone." },
 ];

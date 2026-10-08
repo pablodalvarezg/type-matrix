@@ -102,7 +102,9 @@ src/
 │  ├─ page.tsx                 # home: los cinco modos; los que existen, enlazados
 │  ├─ (modes)/calculator/      # page.tsx: lee searchParams, llama al service
 │  ├─ (modes)/team/            # page.tsx: la misma forma
+│  ├─ (modes)/hangman/         # page.tsx: botón de partida nueva · [id]/page.tsx: el tablero
 │  ├─ api/players/nickname/    # route.ts: POST, emite la cookie y guarda el nickname
+│  ├─ api/hangman/games/       # route.ts: POST crea la partida · [id]/guesses/route.ts: POST una letra
 │  └─ globals.css              # los tokens del tema, claro y oscuro
 ├─ modules/
 │  ├─ battle/                  # stats y daño
@@ -115,6 +117,13 @@ src/
 │  │  ├─ domain/               # dex.ts (tipos) · effectiveness.ts
 │  │  ├─ data/                 # snapshot.repository.ts (server-only), findSpecies/findMove
 │  │  ├─ dex.schema.ts         # Zod del snapshot, se parsea al cargar
+│  │  └─ index.ts
+│  ├─ hangman/                 # ahorcado free play
+│  │  ├─ domain/               # hangman.ts: máscara con acentos plegados, fallos, estado, respuesta al terminar
+│  │  ├─ ui/                   # HangmanBoard · NewGameButton (los dos cliente)
+│  │  ├─ hangman.schema.ts     # una letra a–z · el id de partida
+│  │  ├─ hangman.repository.ts # crear (y el jugador), buscar, agregar letra con concurrencia optimista
+│  │  ├─ hangman.service.ts    # elige la especie, aplica reglas, devuelve la vista pública
 │  │  └─ index.ts
 │  ├─ players/                 # identidad por cookie firmada, nickname
 │  │  ├─ domain/               # player-cookie.ts: firma y verifica `<id>.<hmac>`
@@ -131,13 +140,14 @@ src/
 └─ shared/
    ├─ config/                  # env.ts (Zod, server-only) · env-schema.ts (puro)
    ├─ db/                      # client.ts: neon() sobre HTTP (server-only)
+   ├─ http/                    # require-json.ts: el 415 de toda ruta que emite la cookie
    ├─ ui/                      # Combobox (cliente)
    └─ search-params.ts         # SearchParams · param(), de los formularios GET
 data/snapshot.json             # generado por scripts/ingest.ts, commiteado
 db/migrations/                 # NNNN_nombre.sql, se aplican en orden y una vez
 scripts/ingest.ts              # PokéAPI → snapshot. Manual, nunca en runtime
 scripts/migrate.ts             # aplica las migraciones pendientes. Manual
-tests/                         # tests que no son de un módulo: boundaries, contraste
+tests/                         # tests que no son de un módulo: boundaries, contraste, no-filtración
 ```
 
 ### El snapshot
@@ -208,8 +218,11 @@ Decidido por Pablo el 2026-10-07:
   (solo en producción: por `http` a una IP de la LAN el navegador la descarta),
   `sameSite=lax`, 400 días (el tope de los navegadores), renovada en cada
   guardado y solo si el guardado salió bien. Los endpoints que la emiten piden
-  `Content-Type: application/json`: un form de otro sitio no puede mandarlo, y
-  sin eso podría reemplazarle la cookie a un jugador.
+  `Content-Type: application/json` (`rejectUnlessJson` de `@shared/http`): un
+  form de otro sitio no puede mandarlo, y sin eso podría reemplazarle la cookie
+  a un jugador.
+- **Una partida es del jugador que la creó** (decidido el 2026-10-07): crearla
+  emite la cookie y crea la fila del jugador; con otra cookie, la partida da 404.
 - **Nickname:** 3 a 16 caracteres, letras ASCII, dígitos, `_` y `-`. Único sin
   distinguir mayúsculas, por un índice sobre `lower(nickname)`, no por código.
 - Sin UI de nickname hasta el leaderboard (paso 9): el paso 5 deja el endpoint.
@@ -310,6 +323,8 @@ Reglas que no se negocian, porque son la tesis:
   | Archivo | Por qué |
   |---|---|
   | `src/shared/ui/Combobox.tsx` | Lista de sugerencias estilada (un `<datalist>` no se puede estilar) y teclado ARIA. Es un input con nombre dentro del formulario: sin JS, se envía lo escrito |
+  | `src/modules/hangman/ui/HangmanBoard.tsx` | Cada letra es un `POST` JSON y la respuesta reemplaza la partida. Es la excepción a "`ui` nunca busca datos": manda un intento, no lee datos, y solo tiene lo que el servidor devolvió. Sin JS no se juega (decidido por Pablo el 2026-10-07) |
+  | `src/modules/hangman/ui/NewGameButton.tsx` | `POST` que crea la partida y navega a su id. La misma excepción |
 
 - **Nada de widgets nativos donde haya que estilar.** Sin `<select>` ni
   `type="number"`. Con pocas opciones fijas, pills; para números (nivel, IVs, EVs),
@@ -317,6 +332,8 @@ Reglas que no se negocian, porque son la tesis:
 - **El elemento activo no se puede clickear.** La página en la que estás va como `<span aria-current="page">`; la opción ya elegida, `disabled`.
   Excepción: las pills de un formulario son radios nativos, y un input `disabled`
   no se envía. Ahí el estado elegido lo da el `checked`.
+  Otra: las letras ya probadas del ahorcado van con `aria-disabled` y un guard
+  en el click, porque un `disabled` le saca el foco a quien la apretó con teclado.
 - Sin estado global salvo necesidad demostrada.
 - **Tokens semánticos, no valores a mano.** Nada de colores, fuentes, radios ni espaciados hardcodeados en componentes.
 - **`font-variant-numeric: tabular-nums` en toda columna de números** (stats, rangos de daño).
@@ -337,7 +354,10 @@ Reglas que no se negocian, porque son la tesis:
   vectores atrapan es `Math.round` (verificado mutando cada paso).
 - **El test de no-filtración** (paso 6 en adelante): juega una partida completa por
   la API y verifica que **ninguna respuesta anterior a la última** contiene la
-  respuesta, ni por id ni por nombre.
+  respuesta, ni por id ni por nombre. Es `tests/no-leak.test.ts`: llama a los
+  route handlers con el repositorio en memoria, y revisa también la vista que
+  recibe la página. Verificado que muerde: con la respuesta siempre en la vista,
+  los cuatro casos de partida fallan.
 - **Smoke e2e** (Playwright): uno por modo.
 - **Accesibilidad:** HTML semántico, foco visible, contraste AA (ya testeado), navegación por teclado.
 - **Responsive desde 360 px.** Lighthouse ≥ 90 en mobile, medido sobre el deploy.
@@ -405,8 +425,10 @@ Trabajá solo en el paso actual. No adelantes el siguiente.
       `engines.node` `24.x` fija Node 24 en Vercel para cuando haya deploy.
 - [x] **5. Jugadores y base.** Neon, `db:migrate`, cookie firmada que se emite
       en la primera acción que guarda algo, `POST /api/players/nickname`.
-- [ ] **6. Ahorcado.** ← siguiente
-- [ ] 7. Stats & types · 8. Diario y rachas · 9. Leaderboard · 10. Cierre
+- [x] **6. Ahorcado.** Free play con las 1025 especies, 6 fallos, partida del
+      jugador de la cookie, API JSON y tablero cliente, test de no-filtración.
+- [ ] **7. Stats & types.** ← siguiente
+- [ ] 8. Diario y rachas · 9. Leaderboard · 10. Cierre
 
 ## Forma de trabajo
 
@@ -450,6 +472,11 @@ distintas.
   veredicto es `FIX`.
 - `FIX` como tag de review y `[FIX]` como tag de commit son cosas distintas: el
   primero califica un hallazgo, el segundo un commit.
+- **Todo `/pr-review` cierra con un subject de commit y un PR body sugeridos**
+  (decidido por Pablo el 2026-10-07), también con veredicto `FIX`. El subject
+  sigue el formato de "Forma de trabajo". El body va en inglés, con Summary,
+  Decisions y Test plan, y termina con la línea de Claude Code. Son texto para
+  copiar: commit, push y PR los sigue haciendo Pablo.
 
 ## No hacer
 

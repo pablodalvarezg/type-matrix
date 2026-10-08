@@ -187,6 +187,11 @@ This tree is **where things go, not what has to exist on day one**. A module is 
 
 Names like `Mr. Mime`, `Farfetch'd`, `Type: Null`, `Nidoran♀` and `Flabébé`. Letters are compared with accents folded (`é` → `e`), and anything that is not a letter (spaces, dots, apostrophes, symbols) is revealed from the start. The word's length and shape are public; its letters are not.
 
+- The answer is any of the 1025 species in the snapshot. Six misses end the game.
+- A game belongs to the player who started it: starting one issues the player cookie, and with any other cookie the game is a 404.
+- A repeated letter is refused and costs nothing. Two guesses sent at once cannot both count: the second is refused, so the miss cap holds.
+- The API is `POST /api/hangman/games` and `POST /api/hangman/games/{id}/guesses` with `{ "letter": "a" }`. Each response is the public view of the game: the mask, the letters tried, the misses left and the status, plus the answer once it is over.
+
 ### Stats & types, feedback per guess
 
 For each guessed species the server returns: types (exact match, partial match, none), and each base stat (higher, lower, equal). Guesses are capped per game. The list of species names for autocomplete can travel to the client: it is the guess space, not the answer.

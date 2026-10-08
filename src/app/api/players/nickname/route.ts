@@ -7,6 +7,7 @@ import {
   PLAYER_COOKIE,
   setNickname,
 } from "@modules/players";
+import { rejectUnlessJson } from "@shared/http/require-json";
 
 /**
  * Sets the caller's nickname; their first call also makes them a player.
@@ -14,15 +15,8 @@ import {
  * names in bulk. Worth deciding with the leaderboard (step 9).
  */
 export async function POST(request: Request) {
-  // A form on another site can post text/plain that parses as JSON, and the
-  // response would replace the victim's cookie. JSON needs a CORS preflight.
-  const type = request.headers.get("content-type")?.toLowerCase();
-  if (!type?.startsWith("application/json")) {
-    return Response.json(
-      { error: "Expected application/json" },
-      { status: 415 },
-    );
-  }
+  const notJson = rejectUnlessJson(request);
+  if (notJson) return notJson;
 
   const body = nicknameBody.safeParse(await request.json().catch(() => null));
   if (!body.success) {
