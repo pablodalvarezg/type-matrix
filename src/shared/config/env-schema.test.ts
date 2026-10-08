@@ -11,7 +11,7 @@ const valid = {
 
 describe("parseEnv", () => {
   it("accepts a complete environment", () => {
-    expect(parseEnv(valid)).toEqual(valid);
+    expect(parseEnv(valid)).toEqual({ ...valid, NODE_ENV: "development" });
   });
 
   it.each(Object.keys(valid))("rejects a missing %s", (key) => {

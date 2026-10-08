@@ -132,13 +132,13 @@ PokéAPI asks consumers to cache. The strongest cache is not calling it in produ
 
 No login and no OAuth.
 
-- On the first visit, the server issues a random player id in a signed `httpOnly` cookie.
-- The player picks a nickname the first time they appear on a leaderboard (Zod-validated: length and allowed characters).
+- The first time a player saves something (a nickname, a game), the server issues a random player id in a signed `httpOnly` cookie. Visitors who only look leave no row behind.
+- The player picks a nickname the first time they appear on a leaderboard: 3 to 16 letters, digits, `_` or `-`, unique regardless of case (a database index, not application code).
 - Accepted ceiling: clearing the cookie means starting over with no streak. If that becomes a real problem, a magic-link login is the upgrade.
 
 ### Environment variables
 
-Validated with Zod in `src/shared/config/env.ts`. Nothing reads `process.env` anywhere else.
+Validated with Zod in `src/shared/config/env.ts`, which makes the build fail when one is missing. Nothing else in the app reads `process.env`; the migration script reads `DATABASE_URL` itself because scripts cannot import from `src/`.
 
 | Variable | Use |
 |---|---|
@@ -243,18 +243,18 @@ npm run dev                  # http://localhost:3000
 
 ### Steps, in order
 
-Each step ends deployable and green. The first two need no database: they put something live before any infrastructure exists.
+Each step ends green. There is one deploy, at close-out, once every mode exists.
 
 1. **Scaffold.** Next 16, strict TS, Tailwind 4, ESLint with boundaries (checked with a fixture that should fail), Prettier, Vitest, `env.ts`, `CLAUDE.md`. Theme tokens and the AA check of the palette.
 2. **Data.** `scripts/ingest.ts`, `data/snapshot.json`, `dex` module, type chart. Tests: dual types, immunities.
 3. **Battle calculator.** `battle/domain` first, with the reference test vectors and the edge cases (Shedinja, immunity, minimum damage of 1, rounding). UI afterwards.
-4. **Team builder.** `team/domain` with tests, then UI. **First deploy to Vercel here.**
+4. **Team builder.** `team/domain` with tests, then UI.
 5. **Players and database.** Neon, migrations, signed cookie, nickname.
 6. **Hangman, free play.** Server-validated, plus the answer-leak test.
 7. **Stats & types, free play.** Same engine, same test.
 8. **Daily puzzle and streaks.** Puzzle number, timezone window, seeded selection, streaks derived from results. Tests: determinism, different secret → different answer, window boundaries, gap breaks the streak.
 9. **Leaderboard.**
-10. **Close-out.** Playwright smoke (one test per mode), Lighthouse ≥ 90 on mobile, responsive from 360 px, public README with screenshots, and **measured numbers** for the case study.
+10. **Close-out.** Deploy to Vercel with the four environment variables, Playwright smoke (one test per mode), Lighthouse ≥ 90 on mobile, responsive from 360 px, public README with screenshots, and **measured numbers** for the case study.
 
 ### Pending decisions, with a default
 

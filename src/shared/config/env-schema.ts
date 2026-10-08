@@ -20,6 +20,11 @@ const envSchema = z.object({
 
   // Date of puzzle #1. TODO(pablo): the day of the first deploy with the daily puzzle.
   LAUNCH_DATE: z.iso.date(),
+
+  // Set by Next and Vitest, never by hand.
+  NODE_ENV: z
+    .enum(["development", "production", "test"])
+    .default("development"),
 });
 
 export type Env = z.infer<typeof envSchema>;

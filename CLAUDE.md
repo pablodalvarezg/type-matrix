@@ -59,8 +59,10 @@ Pablo lo pida explícitamente. **Los route handlers son el backend.**
 
 Atlas es ISR sin base de datos. **Type Matrix tiene servidor** (nada de
 `output: 'export'`) porque los juegos validan en el servidor, y tiene
-**Neon Postgres desde el paso 5**, no antes. Los pasos 1 a 4 no necesitan base y
-tienen que poder deployarse sin ella.
+**Neon Postgres desde el paso 5**, no antes. Los pasos 1 a 4 no necesitan base.
+
+**El deploy es uno solo, al final** (decidido por Pablo el 2026-10-07): Pablo
+deploya cuando estén todos los modos, no paso a paso.
 
 ### Stack
 
@@ -100,6 +102,7 @@ src/
 │  ├─ page.tsx                 # home: los cinco modos; los que existen, enlazados
 │  ├─ (modes)/calculator/      # page.tsx: lee searchParams, llama al service
 │  ├─ (modes)/team/            # page.tsx: la misma forma
+│  ├─ api/players/nickname/    # route.ts: POST, emite la cookie y guarda el nickname
 │  └─ globals.css              # los tokens del tema, claro y oscuro
 ├─ modules/
 │  ├─ battle/                  # stats y daño
@@ -113,6 +116,12 @@ src/
 │  │  ├─ data/                 # snapshot.repository.ts (server-only), findSpecies/findMove
 │  │  ├─ dex.schema.ts         # Zod del snapshot, se parsea al cargar
 │  │  └─ index.ts
+│  ├─ players/                 # identidad por cookie firmada, nickname
+│  │  ├─ domain/               # player-cookie.ts: firma y verifica `<id>.<hmac>`
+│  │  ├─ players.schema.ts     # nickname: 3–16, letras, dígitos, _ y -
+│  │  ├─ players.repository.ts # upsert del jugador con su nickname
+│  │  ├─ players.service.ts    # identify: id de la cookie o uno nuevo, y la cookie a setear
+│  │  └─ index.ts
 │  └─ team/                    # debilidades compartidas y cobertura STAB
 │     ├─ domain/               # team.ts: recibe la tabla y los tipos como datos, multiplica y cuenta
 │     ├─ ui/                   # TeamForm · TeamReport
@@ -121,10 +130,13 @@ src/
 │     └─ index.ts
 └─ shared/
    ├─ config/                  # env.ts (Zod, server-only) · env-schema.ts (puro)
+   ├─ db/                      # client.ts: neon() sobre HTTP (server-only)
    ├─ ui/                      # Combobox (cliente)
    └─ search-params.ts         # SearchParams · param(), de los formularios GET
 data/snapshot.json             # generado por scripts/ingest.ts, commiteado
+db/migrations/                 # NNNN_nombre.sql, se aplican en orden y una vez
 scripts/ingest.ts              # PokéAPI → snapshot. Manual, nunca en runtime
+scripts/migrate.ts             # aplica las migraciones pendientes. Manual
 tests/                         # tests que no son de un módulo: boundaries, contraste
 ```
 
@@ -176,7 +188,34 @@ tiene contenido.
 `env.ts` lleva `import "server-only"` y es la única línea que lee `process.env`.
 Acá el guard importa más que en Atlas: ese objeto tiene `DAILY_SECRET`, y un
 componente cliente que lo alcance tiene que romper el build, no mandar la semilla
-al navegador.
+al navegador. La excepción es `scripts/migrate.ts`, que lee `DATABASE_URL` solo
+porque un script no puede importar `src/`.
+
+**`env.ts` se valida en el build.** Next evalúa los route handlers al recolectar
+datos, así que desde el paso 5 `npm run build` falla sin las cuatro variables
+(en `.env.local` o en Vercel). Es a propósito: una variable faltante rompe el
+build, no la primera request.
+
+### Identidad del jugador
+
+Decidido por Pablo el 2026-10-07:
+
+- **La cookie se emite en la primera acción que guarda algo** (un nickname, una
+  partida), no en la primera visita: Next solo escribe cookies desde un Route
+  Handler, una Server Function o el proxy, y así no hay filas por bots ni por
+  quien solo mira. La fila del jugador nace en ese mismo guardado.
+- La cookie es `<uuid>.<hmac-sha256>` con `COOKIE_SECRET`: `httpOnly`, `secure`
+  (solo en producción: por `http` a una IP de la LAN el navegador la descarta),
+  `sameSite=lax`, 400 días (el tope de los navegadores), renovada en cada
+  guardado y solo si el guardado salió bien. Los endpoints que la emiten piden
+  `Content-Type: application/json`: un form de otro sitio no puede mandarlo, y
+  sin eso podría reemplazarle la cookie a un jugador.
+- **Nickname:** 3 a 16 caracteres, letras ASCII, dígitos, `_` y `-`. Único sin
+  distinguir mayúsculas, por un índice sobre `lower(nickname)`, no por código.
+- Sin UI de nickname hasta el leaderboard (paso 9): el paso 5 deja el endpoint.
+- **Excepción a "el service no sabe de HTTP":** `identify` describe la cookie
+  (nombre, valor, atributos) como dato, y la ruta la setea. Los atributos son
+  política de identidad, y cada ruta que guarda tiene que emitir la misma.
 
 ### Capas de un módulo y reglas de dependencia
 
@@ -343,9 +382,10 @@ npm run lint      # eslint, incluye boundaries
 npm run format    # prettier --write
 npm test          # vitest
 npm run ingest    # regenera data/snapshot.json desde PokéAPI (~2.800 llamadas, unos minutos)
+npm run db:migrate # aplica db/migrations pendientes; DATABASE_URL de .env.local, o del shell si no existe
 ```
 
-Los que llegan con su paso del plan: `npm run db:migrate` (5), `npm run test:e2e` (10).
+El que llega con su paso del plan: `npm run test:e2e` (10).
 
 ## Plan
 
@@ -359,12 +399,14 @@ Trabajá solo en el paso actual. No adelantes el siguiente.
       (opción "A+", decidida por Pablo el 2026-10-04): la URL es todo el estado,
       se comparte por link y funciona sin JS. Elegir una sugerencia envía el
       formulario; los números se recalculan con "Calculate".
-- [x] **4. Equipo + primer deploy.** Mismo flujo que la calculadora (`GET`,
+- [x] **4. Equipo.** Mismo flujo que la calculadora (`GET`,
       seis `Combobox`). Cobertura contra los 18 tipos y contra las
       combinaciones dobles que tiene alguna especie; los huecos dobles, aparte.
-      El deploy lo hace Pablo; `engines.node` `24.x` fija Node 24 en Vercel.
-- [ ] **5. Jugadores y base.** ← siguiente
-- [ ] 6. Ahorcado · 7. Stats & types · 8. Diario y rachas · 9. Leaderboard · 10. Cierre
+      `engines.node` `24.x` fija Node 24 en Vercel para cuando haya deploy.
+- [x] **5. Jugadores y base.** Neon, `db:migrate`, cookie firmada que se emite
+      en la primera acción que guarda algo, `POST /api/players/nickname`.
+- [ ] **6. Ahorcado.** ← siguiente
+- [ ] 7. Stats & types · 8. Diario y rachas · 9. Leaderboard · 10. Cierre
 
 ## Forma de trabajo
 
