@@ -5,12 +5,11 @@ import { notFound } from "next/navigation";
 
 import { getGame, GuessBoard, speciesNames } from "@modules/guess";
 import { identify, PLAYER_COOKIE } from "@modules/players";
+import { NewGameButton } from "@shared/ui/NewGameButton";
 
 export const metadata: Metadata = { title: "Stats & types · Type Matrix" };
 
 // The board gets the same view the API returns: no answer until it is over.
-// Its key carries the guess count, so a refresh that finds the game further
-// on remounts it instead of keeping the stale state.
 export default async function GamePage({ params }: PageProps<"/guess/[id]">) {
   const { id } = await params;
   const store = await cookies();
@@ -25,11 +24,9 @@ export default async function GamePage({ params }: PageProps<"/guess/[id]">) {
         </Link>
         <h1 className="text-3xl font-bold">Stats &amp; types</h1>
       </header>
-      <GuessBoard
-        key={`${game.id}:${game.rows.length}`}
-        initial={game}
-        names={speciesNames}
-      />
+      <GuessBoard key={game.id} initial={game} names={speciesNames}>
+        <NewGameButton mode="guess" label="Play again" />
+      </GuessBoard>
     </main>
   );
 }

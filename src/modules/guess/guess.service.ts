@@ -9,7 +9,9 @@ import {
 import {
   addGuess,
   createGame,
+  findDailyGames,
   findGame,
+  type GameRow,
 } from "@modules/guess/guess.repository";
 import { gameId } from "@modules/guess/guess.schema";
 
@@ -31,9 +33,16 @@ function entryOf(slug: string): Entry {
   return { name, types, stats };
 }
 
-const view = (id: string, slug: string, guesses: string[]): GameView => ({
+const view = (
+  id: string,
+  { speciesSlug, guesses, closesAt }: GameRow,
+): GameView => ({
   id,
-  ...progress(entryOf(slug), guesses.map(entryOf)),
+  ...progress(
+    entryOf(speciesSlug),
+    guesses.map(entryOf),
+    closesAt !== null && closesAt <= new Date(),
+  ),
 });
 
 const load = async (id: string, playerId: string) =>
@@ -42,7 +51,7 @@ const load = async (id: string, playerId: string) =>
 export async function startGame(playerId: string): Promise<GameView> {
   const species = snapshot.species[randomInt(snapshot.species.length)]!;
   const id = await createGame(playerId, species.slug);
-  return view(id, species.slug, []);
+  return view(id, { speciesSlug: species.slug, guesses: [], closesAt: null });
 }
 
 /** The player's own game, or undefined for any other id. */
@@ -51,7 +60,18 @@ export async function getGame(
   playerId: string,
 ): Promise<GameView | undefined> {
   const game = await load(id, playerId);
-  return game && view(id, game.speciesSlug, game.guesses);
+  return game && view(id, game);
+}
+
+/** The player's daily games, each with its puzzle number. */
+export async function getDailyGames(
+  playerId: string,
+): Promise<(GameView & { puzzle: number })[]> {
+  const games = await findDailyGames(playerId);
+  return games.map((game) => ({
+    puzzle: game.puzzle,
+    ...view(game.id, game),
+  }));
 }
 
 /** `query` is a name or slug as typed. An unknown one costs nothing. */
@@ -63,13 +83,12 @@ export async function guess(
   const game = await load(id, playerId);
   if (!game) return "not-found";
 
-  const { speciesSlug, guesses } = game;
-  if (view(id, speciesSlug, guesses).status !== "playing") return "over";
+  if (view(id, game).status !== "playing") return "over";
   const species = findSpecies(query);
   if (!species) return "unknown";
-  if (guesses.includes(species.slug)) return "repeated";
-  if (!(await addGuess(id, playerId, guesses.length, species.slug))) {
+  if (game.guesses.includes(species.slug)) return "repeated";
+  if (!(await addGuess(id, playerId, game.guesses.length, species.slug))) {
     return "conflict";
   }
-  return view(id, speciesSlug, [...guesses, species.slug]);
+  return view(id, { ...game, guesses: [...game.guesses, species.slug] });
 }

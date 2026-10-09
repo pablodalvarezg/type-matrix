@@ -1,9 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
 
+import { POST as dailyStartRoute } from "@app/api/daily/games/route";
 import { POST as statsGuessRoute } from "@app/api/guess/games/[id]/guesses/route";
 import { POST as statsStartRoute } from "@app/api/guess/games/route";
 import { POST as guessRoute } from "@app/api/hangman/games/[id]/guesses/route";
 import { POST as startRoute } from "@app/api/hangman/games/route";
+import { getDaily } from "@modules/daily";
+import { shuffle } from "@modules/daily/domain/daily";
+import { POOL_V1 } from "@modules/daily/domain/pool";
 import { findSpecies, snapshot, type Species } from "@modules/dex";
 import { getGame as getStatsGame } from "@modules/guess";
 import { getGame } from "@modules/hangman";
@@ -27,10 +31,18 @@ const statsGames = vi.hoisted(
   () =>
     new Map<
       string,
-      { playerId: string; speciesSlug: string; guesses: string[] }
+      {
+        playerId: string;
+        speciesSlug: string;
+        guesses: string[];
+        puzzle?: number;
+        closesAt: Date | null;
+      }
     >(),
 );
 const pick = vi.hoisted(() => ({ index: 0 }));
+// Launch is today, so today's puzzle is #1.
+const TODAY = vi.hoisted(() => new Date().toISOString().slice(0, 10));
 
 vi.mock("next/headers", () => ({
   cookies: async () => ({
@@ -43,7 +55,12 @@ vi.mock("next/headers", () => ({
   }),
 }));
 vi.mock("@shared/config/env", () => ({
-  env: { COOKIE_SECRET: "c".repeat(32), NODE_ENV: "test" },
+  env: {
+    COOKIE_SECRET: "c".repeat(32),
+    DAILY_SECRET: "d".repeat(32),
+    LAUNCH_DATE: TODAY,
+    NODE_ENV: "test",
+  },
 }));
 vi.mock("@shared/db/client", () => ({ sql: vi.fn() }));
 vi.mock("node:crypto", async (original) => ({
@@ -75,7 +92,7 @@ vi.mock("@modules/hangman/hangman.repository", () => ({
 vi.mock("@modules/guess/guess.repository", () => ({
   createGame: async (playerId: string, speciesSlug: string) => {
     const id = crypto.randomUUID();
-    statsGames.set(id, { playerId, speciesSlug, guesses: [] });
+    statsGames.set(id, { playerId, speciesSlug, guesses: [], closesAt: null });
     return id;
   },
   findGame: async (id: string, playerId: string) => {
@@ -97,6 +114,30 @@ vi.mock("@modules/guess/guess.repository", () => ({
     game.guesses.push(slug);
     return true;
   },
+  // The unique key on (player, puzzle), as the table enforces it.
+  createDailyGame: async (
+    playerId: string,
+    speciesSlug: string,
+    puzzle: number,
+    closesAt: Date,
+  ) => {
+    const taken = [...statsGames.values()].some(
+      (game) => game.playerId === playerId && game.puzzle === puzzle,
+    );
+    if (!taken) {
+      statsGames.set(crypto.randomUUID(), {
+        playerId,
+        speciesSlug,
+        guesses: [],
+        puzzle,
+        closesAt,
+      });
+    }
+  },
+  findDailyGames: async (playerId: string) =>
+    [...statsGames]
+      .filter(([, game]) => game.playerId === playerId && game.puzzle)
+      .map(([id, game]) => ({ id, ...game, guesses: [...game.guesses] })),
 }));
 
 const post = (body?: object, type = "application/json") =>
@@ -141,6 +182,13 @@ const modes = {
     start: statsStartRoute,
     guess: statsGuessRoute,
     view: getStatsGame,
+  },
+  daily: {
+    start: () => dailyStartRoute(post({ date: TODAY })),
+    guess: statsGuessRoute,
+    // What the daily page hands the board.
+    view: async (_id: string, playerId: string) =>
+      (await getDaily(playerId, 1))?.game,
   },
 };
 
@@ -282,5 +330,50 @@ describe("Stats & types: no answer before the game is over", () => {
       params: Promise.resolve({ id: game.id }),
     });
     expect(response.status).toBe(404);
+  });
+});
+
+// Puzzle #1 under the test secret. Not Bulbasaur, whose dex number is 1.
+const DAILY = shuffle(POOL_V1, "d".repeat(32), "v1")[1]!;
+
+describe("Daily puzzle: no answer before the game is over", () => {
+  it.each(["won", "lost"] as const)("%s", async (outcome) => {
+    const { species: answer, responses } = await play(
+      "daily",
+      DAILY,
+      guesses(outcome),
+    );
+
+    expect(responses.at(-1)).toMatchObject({
+      status: outcome,
+      answer: { name: answer.name, stats: answer.stats },
+    });
+    expectNoAnswer(responses.slice(0, -1), answer);
+  });
+
+  it("takes no guess once the puzzle has closed everywhere", async () => {
+    const { game } = await play("daily", DAILY, () => []);
+    statsGames.get(game.id)!.closesAt = new Date(Date.now() - 1);
+    const response = await statsGuessRoute(post({ species: "Bulbasaur" }), {
+      params: Promise.resolve({ id: game.id }),
+    });
+    expect(response.status).toBe(409);
+    expect(await getDaily(playerOf(), 1)).toMatchObject({
+      game: { status: "lost", rows: [] },
+      streak: { current: 0 },
+    });
+  });
+
+  it("gives the same game to a second start", async () => {
+    const { game } = await play("daily", DAILY, () => []);
+    const again = await dailyStartRoute(post({ date: TODAY }));
+    expect(await again.json()).toMatchObject({ id: game.id });
+  });
+
+  it("refuses a date that is today nowhere", async () => {
+    jar.clear();
+    const response = await dailyStartRoute(post({ date: "2000-01-01" }));
+    expect(response.status).toBe(400);
+    expect(jar.size).toBe(0);
   });
 });

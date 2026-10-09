@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   addGuess,
   createGame,
+  findDailyGames,
   findGame,
 } from "@modules/guess/guess.repository";
 
@@ -21,11 +22,16 @@ describe("guess repository", () => {
 
   it("maps a stored game", async () => {
     sql.mockResolvedValueOnce([
-      { species_slug: "mr-mime", guesses: ["bulbasaur", "ivysaur"] },
+      {
+        species_slug: "mr-mime",
+        guesses: ["bulbasaur", "ivysaur"],
+        closes_at: null,
+      },
     ]);
     expect(await findGame(GAME, PLAYER)).toEqual({
       speciesSlug: "mr-mime",
       guesses: ["bulbasaur", "ivysaur"],
+      closesAt: null,
     });
   });
 
@@ -42,5 +48,26 @@ describe("guess repository", () => {
   it("refuses the guess when another one landed first", async () => {
     sql.mockResolvedValueOnce([]);
     expect(await addGuess(GAME, PLAYER, 2, "venusaur")).toBe(false);
+  });
+
+  it("maps the player's daily games", async () => {
+    sql.mockResolvedValueOnce([
+      {
+        id: GAME,
+        puzzle: 9,
+        species_slug: "mr-mime",
+        guesses: ["bulbasaur"],
+        closes_at: new Date("2026-10-10T12:00:00Z"),
+      },
+    ]);
+    expect(await findDailyGames(PLAYER)).toEqual([
+      {
+        id: GAME,
+        puzzle: 9,
+        speciesSlug: "mr-mime",
+        guesses: ["bulbasaur"],
+        closesAt: new Date("2026-10-10T12:00:00Z"),
+      },
+    ]);
   });
 });

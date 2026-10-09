@@ -104,9 +104,11 @@ src/
 │  ├─ (modes)/team/            # page.tsx: la misma forma
 │  ├─ (modes)/hangman/         # page.tsx: botón de partida nueva · [id]/page.tsx: el tablero
 │  ├─ (modes)/guess/           # Stats & types, la misma forma que hangman
+│  ├─ (modes)/daily/           # page.tsx: botón con la fecha local · [n]/page.tsx: el tablero de guess y la racha
 │  ├─ api/players/nickname/    # route.ts: POST, emite la cookie y guarda el nickname
 │  ├─ api/hangman/games/       # route.ts: POST crea la partida · [id]/guesses/route.ts: POST una letra
 │  ├─ api/guess/games/         # la misma forma; el intento es `{ species }`, nombre o slug
+│  ├─ api/daily/games/         # route.ts: POST `{ date }`, crea o devuelve la del día; los intentos van a api/guess
 │  └─ globals.css              # los tokens del tema, claro y oscuro
 ├─ modules/
 │  ├─ battle/                  # stats y daño
@@ -115,16 +117,21 @@ src/
 │  │  ├─ battle.schema.ts      # Zod de los search params del formulario
 │  │  ├─ battle.service.ts     # busca en dex, STAB, efectividad, llama al domain
 │  │  └─ index.ts
+│  ├─ daily/                   # puzzle diario, sin repositorio: sus partidas son de guess
+│  │  ├─ domain/               # daily.ts: número, ventana UTC−12…+14, mezcla con HMAC, rachas · pool.ts: POOL_V1
+│  │  ├─ daily.schema.ts       # `{ date }` · el número de la URL
+│  │  ├─ daily.service.ts      # elige la especie, valida la fecha, calcula la racha
+│  │  └─ index.ts
 │  ├─ dex/                     # especies, movimientos, tabla de tipos
 │  │  ├─ domain/               # dex.ts (tipos) · effectiveness.ts
 │  │  ├─ data/                 # snapshot.repository.ts (server-only), findSpecies/findMove
 │  │  ├─ dex.schema.ts         # Zod del snapshot, se parsea al cargar
 │  │  └─ index.ts
-│  ├─ guess/                   # Stats & types free play
+│  ├─ guess/                   # Stats & types, free play y las partidas del diario
 │  │  ├─ domain/               # guess.ts: veredicto de tipos, flechas por stat, estado, respuesta al terminar
-│  │  ├─ ui/                   # GuessBoard (cliente)
+│  │  ├─ ui/                   # GuessBoard (cliente); lo que va al terminar llega por `children`
 │  │  ├─ guess.schema.ts       # `{ species }` · el id de partida
-│  │  ├─ guess.repository.ts   # como el de hangman: `guesses text[]`, concurrencia por cantidad
+│  │  ├─ guess.repository.ts   # como el de hangman: `guesses text[]`, concurrencia por cantidad; `puzzle` y `closes_at` en las diarias
 │  │  ├─ guess.service.ts      # elige la especie, resuelve el nombre, devuelve la vista pública
 │  │  └─ index.ts
 │  ├─ hangman/                 # ahorcado free play
@@ -334,7 +341,7 @@ Reglas que no se negocian, porque son la tesis:
   | `src/shared/ui/Combobox.tsx` | Lista de sugerencias estilada (un `<datalist>` no se puede estilar) y teclado ARIA. Es un input con nombre dentro del formulario: sin JS, se envía lo escrito |
   | `src/modules/hangman/ui/HangmanBoard.tsx` | Cada letra es un `POST` JSON y la respuesta reemplaza la partida. Es la excepción a "`ui` nunca busca datos": manda un intento, no lee datos, y solo tiene lo que el servidor devolvió. Sin JS no se juega (decidido por Pablo el 2026-10-07) |
   | `src/modules/guess/ui/GuessBoard.tsx` | La misma excepción que `HangmanBoard`: cada especie es un `POST` JSON. Lleva el `Combobox` con los 1025 nombres, que son el espacio de búsqueda |
-  | `src/shared/ui/NewGameButton.tsx` | `POST` que crea la partida de un modo y navega a su id. La misma excepción, compartida por los dos modos |
+  | `src/shared/ui/NewGameButton.tsx` | `POST` que crea la partida de un modo y navega a su id. La misma excepción, compartida por los tres modos. El diario manda la fecha local del navegador, que solo el cliente conoce, y navega al número de puzzle |
 
 - **Nada de widgets nativos donde haya que estilar.** Sin `<select>` ni
   `type="number"`. Con pocas opciones fijas, pills; para números (nivel, IVs, EVs),
@@ -374,6 +381,10 @@ Reglas que no se negocian, porque son la tesis:
   objeto, con cualquier clave: es la respuesta sin el nombre (verificado que
   muerde). Los intentos del test no comparten esa línea con la respuesta, y
   el test lo comprueba: hay 15 grupos de especies con las mismas stats.
+  El diario juega su puzzle #1 con `LAUNCH_DATE` = hoy y revisa también la
+  vista de `/daily/[n]` (verificado que muerde: con el slug de la respuesta en
+  esa vista, sus dos casos fallan). También prueba que un puzzle cerrado no
+  acepta intentos (verificado que muerde: sin el chequeo del cierre, falla).
 - **Smoke e2e** (Playwright): uno por modo.
 - **Accesibilidad:** HTML semántico, foco visible, contraste AA (ya testeado), navegación por teclado.
 - **Responsive desde 360 px.** Lighthouse ≥ 90 en mobile, medido sobre el deploy.
@@ -400,6 +411,9 @@ portfolio y de Atlas. Si descubrís algo del entorno que costó averiguar, anota
 - **`next typegen` antes de `tsc`.** Next 16 genera tipos globales (`LayoutProps`, `PageProps`) en `.next/types/`. En un clone limpio, `tsc --noEmit` a secas falla. Por eso `npm run check` es `next typegen && tsc --noEmit`.
 - **Git Bash traduce los argumentos que empiezan con `/`.** `taskkill /PID 1234 /F` falla. Salidas: `Stop-Process -Id 1234 -Force` en PowerShell, `taskkill //PID 1234 //F`, o `MSYS_NO_PATHCONV=1` delante.
 - **`next dev` no arranca un segundo servidor sobre el mismo directorio.** Avisa `Another next dev server is already running` y da el PID y el log en `.next/dev/logs/next-development.log`. **Un agente que levanta el dev server lo baja antes de terminar el turno.**
+- **El reloj de la máquina atrasa ~6 s respecto de Neon** (medido el
+  2026-10-09). El cierre de un puzzle se compara con el reloj de la app: para
+  simularlo por SQL, `closes_at = now() - interval '1 minute'`, no un segundo.
 - **Una clase inválida de Tailwind no falla: no existe.** `max-w-75ch` compila a nada, en silencio. Los valores arbitrarios van entre corchetes: `max-w-[75ch]`. Si un estilo "no se aplica", buscá la clase en `.next/static/**/*.css`.
 - **Los heredocs de esta terminal se comen un nivel de backslash, incluso citados.** Cualquier archivo con secuencias de escape se escribe con la herramienta de edición, no por heredoc.
 - **`npm audit` marca vulnerabilidades solo en dependencias de desarrollo** (cadena de ESLint y Vitest 3). `npm audit --omit=dev` da cero. Se resuelven con el salto de major de esas herramientas, como tarea propia.
@@ -448,8 +462,18 @@ Trabajá solo en el paso actual. No adelantes el siguiente.
       flecha por stat base, la especie repetida se rechaza sin gastar, y al
       terminar se muestra la respuesta con tipos y stats (decidido por Pablo el
       2026-10-08). El test de no-filtración juega también este modo.
-- [ ] **8. Diario y rachas.** ← siguiente
-- [ ] 9. Leaderboard · 10. Cierre
+- [x] **8. Diario y rachas.** Una partida diaria es una de Stats & types con
+      `puzzle` (columna nueva en `guess_games`, única por jugador): mismo
+      motor, mismo tablero, mismos intentos. `POOL_V1` commiteado como lista de
+      slugs. Racha actual y mejor; la actual sigue viva mientras el puzzle de
+      hoy no se jugó, y se corta con una derrota o un puzzle salteado. El
+      diario arranca con un botón (decidido por Pablo el 2026-10-09). Un
+      puzzle cierra cuando su fecha ya no es hoy en ningún lado (12:00 UTC
+      del día siguiente, `closes_at`): la partida sin terminar queda perdida
+      y no acepta intentos (opción por defecto de la review del 2026-10-09).
+- [ ] **9. Leaderboard.** ← siguiente. Necesita el tiempo medido por el
+      servidor hasta el intento ganador, que hoy no se guarda.
+- [ ] 10. Cierre
 
 ## Forma de trabajo
 

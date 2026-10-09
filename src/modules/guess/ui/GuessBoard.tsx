@@ -1,7 +1,13 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type FormEvent,
+  type ReactNode,
+} from "react";
 
 import {
   STATS,
@@ -12,7 +18,6 @@ import {
   type TypeMatch,
 } from "@modules/guess/domain/guess";
 import { Combobox } from "@shared/ui/Combobox";
-import { NewGameButton } from "@shared/ui/NewGameButton";
 
 type Game = Progress & { id: string };
 
@@ -55,18 +60,27 @@ const typesOf = (entry: Entry) => entry.types.join(" / ");
  * so the answer reaches this component only in the response that ends it.
  * The species names are the guess space, every one of them.
  *
- * As in Hangman, a 409 means the page payload is behind the server (back and
- * forward reuse it): refresh, and the page remounts the board with the game.
+ * A 409 means the page payload is behind the server (back and forward reuse
+ * it, or a daily puzzle closed): refresh. The guess that ends the game
+ * refreshes too, so the page can render `children`, what comes after it,
+ * from the server: a new game, or the streak. Either way the board keeps
+ * its place, and with it focus and message, and takes the server's game
+ * unless it is itself further on.
  */
 export function GuessBoard({
   initial,
   names,
+  children,
 }: {
   initial: Game;
   names: string[];
+  children?: ReactNode;
 }) {
   const router = useRouter();
   const [game, setGame] = useState(initial);
+  if (initial !== game && initial.rows.length >= game.rows.length) {
+    setGame(initial);
+  }
   const [pending, setPending] = useState(false);
   const [message, setMessage] = useState<string>();
   const form = useRef<HTMLFormElement>(null);
@@ -104,6 +118,7 @@ export function GuessBoard({
       setGame(next);
       const row = next.rows.at(-1);
       if (row) setMessage(`${row.name}: types ${MATCHES[row.typeMatch][1]}.`);
+      if (next.status !== "playing") router.refresh();
     } else {
       setMessage(body?.error ?? "Could not reach the server. Try again.");
       if (response?.status === 409) router.refresh();
@@ -194,12 +209,12 @@ export function GuessBoard({
         {message && `${message} `}
         {game.status === "won" && `Got it: ${game.answer?.name}.`}
         {game.status === "lost" &&
-          `Out of guesses. It was ${game.answer?.name}.`}
+          `${game.remaining > 0 ? "This puzzle has closed" : "Out of guesses"}. It was ${game.answer?.name}.`}
         {!over && `${game.remaining} guesses left.`}
       </p>
 
       {over ? (
-        <NewGameButton mode="guess" label="Play again" />
+        <div aria-live="polite">{children}</div>
       ) : (
         <form
           ref={form}

@@ -4,34 +4,45 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 /**
- * Starts a game of `mode` on the server and opens it. The game id is all it
- * gets back. Every mode has `/api/<mode>/games` and a page at `/<mode>/<id>`.
+ * Starts a game of `mode` on the server and opens it. Every mode has
+ * `/api/<mode>/games` and a page at `/<mode>/<id>`, except the daily one: it
+ * sends the local date, and its page is the puzzle number.
  */
+/** YYYY-MM-DD in the browser's time zone, whatever its locale. */
+function localDate() {
+  const now = new Date();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+}
+
 export function NewGameButton({
   mode,
   label,
 }: {
-  mode: "hangman" | "guess";
+  mode: "hangman" | "guess" | "daily";
   label: string;
 }) {
   const router = useRouter();
   const [pending, setPending] = useState(false);
-  const [failed, setFailed] = useState(false);
+  const [error, setError] = useState<string>();
 
   async function start() {
     setPending(true);
-    setFailed(false);
+    setError(undefined);
     const response = await fetch(`/api/${mode}/games`, {
       method: "POST",
       headers: { "content-type": "application/json" },
+      body:
+        mode === "daily" ? JSON.stringify({ date: localDate() }) : undefined,
     }).catch(() => null);
-    const game = response?.ok && (await response.json().catch(() => null));
-    if (!game) {
+    const body = await response?.json().catch(() => null);
+    if (!response?.ok || !body) {
       setPending(false);
-      setFailed(true);
+      setError(body?.error ?? "Could not start a game. Try again.");
       return;
     }
-    router.push(`/${mode}/${(game as { id: string }).id}`);
+    const { id, puzzle } = body as { id: string; puzzle?: number };
+    router.push(`/${mode}/${puzzle ?? id}`);
   }
 
   return (
@@ -45,7 +56,7 @@ export function NewGameButton({
         {pending ? "Starting…" : label}
       </button>
       <p role="status" className="text-sm">
-        {failed && "Could not start a game. Try again."}
+        {error}
       </p>
     </div>
   );

@@ -1,5 +1,7 @@
+export { createDailyGame } from "@modules/guess/guess.repository";
 export { guessBody } from "@modules/guess/guess.schema";
 export {
+  getDailyGames,
   getGame,
   guess,
   speciesNames,

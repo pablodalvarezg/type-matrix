@@ -202,6 +202,16 @@ For each guessed species the server returns: types (exact match, partial match, 
 - Once the game is over, the answer comes back in full: name, types and base stats.
 - The API is `POST /api/guess/games` and `POST /api/guess/games/{id}/guesses` with `{ "species": "Mr. Mime" }` (a name or slug). Each response is the public view of the game: one row per guess with its feedback, the guesses left and the status, plus the answer once it is over.
 
+### Daily puzzle, details that are easy to miss
+
+A daily game is a Stats & types game with a puzzle number: same rules, same board, same guesses endpoint.
+
+- `POOL_V1` is the 1025 snapshot slugs, committed as a list so a re-ingest cannot change it. The shuffle sorts it by `HMAC(HMAC(DAILY_SECRET, "v1"), slug)`.
+- `POST /api/daily/games` with `{ "date": "YYYY-MM-DD" }`, the browser's local date. A date that is not today anywhere, or before launch, is a 400. Starting again returns the same game: the table has a unique key on player and puzzle. The page is `/daily/{n}`, and only the player's own game is found there.
+- **Streaks** (current and best) appear once the game is over. The current one stays alive while today's puzzle is unplayed, and ends with a loss or a puzzle skipped.
+- **A puzzle closes when its date is no longer today anywhere**: 12:00 UTC the next day. An unfinished game is lost from then on and takes no more guesses, so an answer seen elsewhere cannot win it late and mend a streak.
+- The server never sees the player's date on that page, so it takes today to be the earliest puzzle still open somewhere, or the latest one the player has played if that is later. A puzzle skipped can show as a break up to a day late.
+
 ---
 
 ## Visual identity

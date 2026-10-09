@@ -53,11 +53,18 @@ export function compare(guess: Entry, answer: Entry): Row {
   };
 }
 
-/** `guesses` in order. A guess is the answer when its name is. */
-export function progress(answer: Entry, guesses: Entry[]): Progress {
+/**
+ * `guesses` in order. A guess is the answer when its name is. A `closed`
+ * game (a daily puzzle no longer today anywhere) is lost unless won.
+ */
+export function progress(
+  answer: Entry,
+  guesses: Entry[],
+  closed = false,
+): Progress {
   const status: Status = guesses.some((guess) => guess.name === answer.name)
     ? "won"
-    : guesses.length >= MAX_GUESSES
+    : closed || guesses.length >= MAX_GUESSES
       ? "lost"
       : "playing";
 

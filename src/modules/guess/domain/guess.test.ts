@@ -100,4 +100,16 @@ describe("progress", () => {
     expect(game.status).toBe("playing");
     expect(game).not.toHaveProperty("answer");
   });
+
+  it("is lost once closed, guesses left or not, and gives the answer", () => {
+    expect(progress(answer, misses(2), true)).toMatchObject({
+      status: "lost",
+      remaining: MAX_GUESSES - 2,
+      answer,
+    });
+  });
+
+  it("stays won once closed", () => {
+    expect(progress(answer, [answer], true).status).toBe("won");
+  });
 });
