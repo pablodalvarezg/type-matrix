@@ -1,4 +1,8 @@
-export { createDailyGame } from "@modules/guess/guess.repository";
+export {
+  createDailyGame,
+  findLeaderboard,
+  type LeaderboardRow,
+} from "@modules/guess/guess.repository";
 export { guessBody } from "@modules/guess/guess.schema";
 export {
   getDailyGames,

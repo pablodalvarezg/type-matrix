@@ -138,6 +138,7 @@ vi.mock("@modules/guess/guess.repository", () => ({
     [...statsGames]
       .filter(([, game]) => game.playerId === playerId && game.puzzle)
       .map(([id, game]) => ({ id, ...game, guesses: [...game.guesses] })),
+  findLeaderboard: async () => [],
 }));
 
 const post = (body?: object, type = "application/json") =>
@@ -166,7 +167,8 @@ const objectsIn = (value: unknown): object[] =>
 function expectNoAnswer(responses: unknown[], species: Species) {
   for (const response of responses) {
     const text = JSON.stringify(response).toLowerCase();
-    expect(response).not.toHaveProperty("answer");
+    // At any depth: the daily view wraps the game.
+    expect(objectsIn(response).filter((o) => "answer" in o)).toEqual([]);
     expect(text).not.toContain(species.name.toLowerCase());
     expect(text).not.toContain(species.slug);
     expect(numbersIn(response)).not.toContain(species.id);
@@ -186,9 +188,8 @@ const modes = {
   daily: {
     start: () => dailyStartRoute(post({ date: TODAY })),
     guess: statsGuessRoute,
-    // What the daily page hands the board.
-    view: async (_id: string, playerId: string) =>
-      (await getDaily(playerId, 1))?.game,
+    // All the daily page gets: the game, and nothing else until it is over.
+    view: async (_id: string, playerId: string) => getDaily(playerId, 1),
   },
 };
 

@@ -8,20 +8,30 @@ import {
   todayWindow,
 } from "@modules/daily/domain/daily";
 import { POOL_V1 } from "@modules/daily/domain/pool";
-import { createDailyGame, getDailyGames } from "@modules/guess";
+import {
+  createDailyGame,
+  findLeaderboard,
+  getDailyGames,
+  type LeaderboardRow,
+} from "@modules/guess";
 import { env } from "@shared/config/env";
 
 type DailyGame = Awaited<ReturnType<typeof getDailyGames>>[number];
 export interface Daily {
   game: DailyGame;
   streak?: { current: number; best: number };
+  leaderboard?: LeaderboardRow[];
+  askNickname?: boolean;
 }
 
 // answer(n) = order[n mod length]. A new pool version would take over from a
 // given puzzle number, and older numbers would keep resolving here.
 const order = shuffle(POOL_V1, env.DAILY_SECRET, "v1");
 
-/** The player's game for `puzzle`, and their streaks once it is over. */
+/**
+ * The player's game for `puzzle`. Once it is over, their streaks and the
+ * puzzle's leaderboard too.
+ */
 export async function getDaily(
   playerId: string,
   puzzle: number | string,
@@ -42,12 +52,16 @@ export async function getDaily(
     ...games.map((g) => g.puzzle),
   );
   const finished = games.filter((g) => g.status !== "playing");
+  const leaderboard = await findLeaderboard(n.data, playerId);
   return {
     game,
     streak: streaks(
       finished.map((g) => ({ puzzle: g.puzzle, won: g.status === "won" })),
       today,
     ),
+    leaderboard,
+    // Every win is on the board once its player has a nickname.
+    askNickname: game.status === "won" && !leaderboard.some((row) => row.you),
   };
 }
 
@@ -65,5 +79,7 @@ export async function startDaily(
     puzzle,
     closesAt(date),
   );
-  return (await getDaily(playerId, puzzle, now))!.game;
+  // Just the game: streaks and leaderboard are the page's.
+  const games = await getDailyGames(playerId);
+  return games.find((g) => g.puzzle === puzzle)!;
 }

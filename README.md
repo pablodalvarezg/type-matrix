@@ -63,6 +63,7 @@ No scheduler: the puzzle is computed, not published.
 - One game per player per puzzle, enforced with a unique constraint, not with application code.
 - **A streak counts consecutive puzzle numbers won**, not calendar days. A loss or a missed puzzle resets it. It is derived from the results table, never stored as a counter that can drift.
 - Leaderboard per puzzle: fewest guesses first, then shortest **server-measured** time (from game creation to the winning guess). The client's clock is never trusted.
+- Only players with a nickname are listed; a winner without one is offered the form. The board shows once your game is over: the top 10, and your own row if it falls lower.
 
 ### 4. The damage formula has more modifiers than it looks like
 

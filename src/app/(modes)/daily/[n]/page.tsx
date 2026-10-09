@@ -3,13 +3,13 @@ import { cookies } from "next/headers";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { getDaily } from "@modules/daily";
+import { getDaily, Leaderboard } from "@modules/daily";
 import { GuessBoard, speciesNames } from "@modules/guess";
-import { identify, PLAYER_COOKIE } from "@modules/players";
+import { identify, NicknameForm, PLAYER_COOKIE } from "@modules/players";
 
 export const metadata: Metadata = { title: "Daily puzzle · Type Matrix" };
 
-// The same board as free play. The streak is rendered
+// The same board as free play. The streak and the leaderboard are rendered
 // here, on the server, once the game is over: the board refreshes the page
 // on the guess that ends it.
 export default async function DailyGamePage({
@@ -19,7 +19,7 @@ export default async function DailyGamePage({
   const store = await cookies();
   const daily = await getDaily(identify(store.get(PLAYER_COOKIE)?.value).id, n);
   if (!daily) notFound();
-  const { game, streak } = daily;
+  const { game, streak, leaderboard, askNickname } = daily;
 
   return (
     <main className="mx-auto flex max-w-2xl flex-col gap-6 px-4 py-8">
@@ -37,6 +37,14 @@ export default async function DailyGamePage({
           </p>
         )}
       </GuessBoard>
+      {/* Outside the board, whose live region would read the whole table. */}
+      {askNickname && (
+        <NicknameForm
+          prompt="Pick a nickname to join the leaderboard"
+          focusOnSave="leaderboard"
+        />
+      )}
+      {leaderboard && <Leaderboard rows={leaderboard} />}
     </main>
   );
 }
