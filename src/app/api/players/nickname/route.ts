@@ -12,7 +12,7 @@ import { rejectUnlessJson } from "@shared/http/require-json";
 /**
  * Sets the caller's nickname; their first call also makes them a player.
  * TODO(pablo): no throttle yet, so a script that drops its cookie can claim
- * names in bulk. Worth deciding with the leaderboard (step 9).
+ * names in bulk. Left for the close-out (step 10).
  */
 export async function POST(request: Request) {
   const notJson = rejectUnlessJson(request);

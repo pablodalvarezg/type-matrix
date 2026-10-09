@@ -43,7 +43,8 @@ export async function findGame(
 
 /**
  * Appends a guess only if no other one landed since `count` guesses were
- * read, so two at once cannot both pass the cap. False if one did.
+ * read, so two at once cannot both pass the cap. False if one did. The
+ * winning guess stamps `won_at`: the last one, since a won game takes none.
  */
 export async function addGuess(
   id: string,
@@ -52,7 +53,8 @@ export async function addGuess(
   slug: string,
 ): Promise<boolean> {
   const rows = await sql`
-    UPDATE guess_games SET guesses = array_append(guesses, ${slug})
+    UPDATE guess_games SET guesses = array_append(guesses, ${slug}),
+      won_at = CASE WHEN species_slug = ${slug} THEN now() END
     WHERE id = ${id} AND player_id = ${playerId}
       AND cardinality(guesses) = ${count}
     RETURNING id`;
@@ -89,4 +91,41 @@ export async function findDailyGames(
     guesses: row.guesses,
     closesAt: closesAt(row.closes_at),
   }));
+}
+
+export interface LeaderboardRow {
+  place: number;
+  nickname: string;
+  guesses: number;
+  /** From the game's creation to its winning guess, by the database. */
+  ms: number;
+  you: boolean;
+}
+
+/**
+ * The puzzle's winners with a nickname: fewest guesses, then shortest time.
+ * The top 10, and the player's own row wherever it falls.
+ * ponytail: no index on `puzzle`, a scan of every game; add one when the
+ * table holds enough rows to notice.
+ */
+export async function findLeaderboard(
+  puzzle: number,
+  playerId: string,
+): Promise<LeaderboardRow[]> {
+  const rows = await sql`
+    WITH ranked AS (
+      SELECT g.player_id, p.nickname,
+        cardinality(g.guesses) AS guesses,
+        round(extract(epoch FROM g.won_at - g.created_at) * 1000)::int AS ms,
+        row_number() OVER (
+          ORDER BY cardinality(g.guesses), g.won_at - g.created_at, g.id
+        )::int AS place
+      FROM guess_games g JOIN players p ON p.id = g.player_id
+      WHERE g.puzzle = ${puzzle} AND g.won_at IS NOT NULL
+        AND p.nickname IS NOT NULL
+    )
+    SELECT place, nickname, guesses, ms, player_id = ${playerId} AS you
+    FROM ranked WHERE place <= 10 OR player_id = ${playerId}
+    ORDER BY place`;
+  return rows as LeaderboardRow[];
 }

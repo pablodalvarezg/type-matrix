@@ -7,6 +7,7 @@ import { snapshot } from "@modules/dex";
 
 const guess = vi.hoisted(() => ({
   createDailyGame: vi.fn(),
+  findLeaderboard: vi.fn(),
   getDailyGames: vi.fn(),
 }));
 vi.mock("@modules/guess", () => guess);
@@ -23,6 +24,7 @@ const game = (puzzle: number, status: string) => ({ puzzle, status });
 beforeEach(() => {
   vi.clearAllMocks();
   guess.getDailyGames.mockResolvedValue([game(9, "playing")]);
+  guess.findLeaderboard.mockResolvedValue([]);
 });
 
 describe("POOL_V1", () => {
@@ -78,6 +80,29 @@ describe("getDaily", () => {
     ]);
     expect(await getDaily(PLAYER, 9, NOW)).toMatchObject({
       streak: { current: 4, best: 4 },
+    });
+  });
+
+  it("adds the puzzle's leaderboard once the game is over", async () => {
+    expect(await getDaily(PLAYER, 9, NOW)).not.toHaveProperty("leaderboard");
+    expect(guess.findLeaderboard).not.toHaveBeenCalled();
+
+    const row = { place: 1, nickname: "ash", guesses: 3, ms: 1, you: true };
+    guess.getDailyGames.mockResolvedValue([game(9, "won")]);
+    guess.findLeaderboard.mockResolvedValue([row]);
+    expect(await getDaily(PLAYER, 9, NOW)).toMatchObject({
+      leaderboard: [row],
+      askNickname: false,
+    });
+    expect(guess.findLeaderboard).toHaveBeenCalledWith(9, PLAYER);
+  });
+
+  it("asks a winner off the board for a nickname, and only a winner", async () => {
+    guess.getDailyGames.mockResolvedValue([game(9, "won")]);
+    expect(await getDaily(PLAYER, 9, NOW)).toMatchObject({ askNickname: true });
+    guess.getDailyGames.mockResolvedValue([game(9, "lost")]);
+    expect(await getDaily(PLAYER, 9, NOW)).toMatchObject({
+      askNickname: false,
     });
   });
 
