@@ -167,7 +167,8 @@ const objectsIn = (value: unknown): object[] =>
 function expectNoAnswer(responses: unknown[], species: Species) {
   for (const response of responses) {
     const text = JSON.stringify(response).toLowerCase();
-    expect(response).not.toHaveProperty("answer");
+    // At any depth: the daily view wraps the game.
+    expect(objectsIn(response).filter((o) => "answer" in o)).toEqual([]);
     expect(text).not.toContain(species.name.toLowerCase());
     expect(text).not.toContain(species.slug);
     expect(numbersIn(response)).not.toContain(species.id);

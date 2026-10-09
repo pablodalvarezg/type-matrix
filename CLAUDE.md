@@ -391,6 +391,9 @@ Reglas que no se negocian, porque son la tesis:
   acepta intentos (verificado que muerde: sin el chequeo del cierre, falla).
   La vista del diario es todo lo que devuelve `getDaily`, así que racha y
   leaderboard entran en la búsqueda; mientras se juega, solo trae la partida.
+  Por ese envoltorio, la clave `answer` se busca a cualquier profundidad
+  (verificado que muerde: con `answer` dentro de `game`, la aserción vieja,
+  solo en el primer nivel, pasaba).
 - **Smoke e2e** (Playwright): uno por modo.
 - **Accesibilidad:** HTML semántico, foco visible, contraste AA (ya testeado), navegación por teclado.
 - **Responsive desde 360 px.** Lighthouse ≥ 90 en mobile, medido sobre el deploy.

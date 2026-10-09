@@ -5,9 +5,17 @@ import { useState, type FormEvent } from "react";
 
 /**
  * Saves the player's nickname, then refreshes the page so the server renders
- * what it unlocks, such as their row on a leaderboard.
+ * what it unlocks, such as their row on a leaderboard. The refresh removes
+ * the form, so the focus moves first to `focusOnSave`, an element that stays.
+ * The pattern mirrors the server's, which still has the last word.
  */
-export function NicknameForm({ prompt }: { prompt: string }) {
+export function NicknameForm({
+  prompt,
+  focusOnSave,
+}: {
+  prompt: string;
+  focusOnSave: string;
+}) {
   const router = useRouter();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string>();
@@ -23,9 +31,13 @@ export function NicknameForm({ prompt }: { prompt: string }) {
       body: JSON.stringify({ nickname }),
     }).catch(() => null);
     const body = await response?.json().catch(() => null);
-    if (response?.ok) router.refresh();
-    else setError(body?.error ?? "Could not reach the server. Try again.");
     setPending(false);
+    if (!response?.ok) {
+      setError(body?.error ?? "Could not reach the server. Try again.");
+      return;
+    }
+    document.getElementById(focusOnSave)?.focus();
+    router.refresh();
   }
 
   return (
@@ -40,6 +52,8 @@ export function NicknameForm({ prompt }: { prompt: string }) {
           type="text"
           autoComplete="nickname"
           required
+          pattern="[A-Za-z0-9_\-]{3,16}"
+          title="3 to 16 characters: letters, digits, _ or -"
           aria-invalid={error ? true : undefined}
           aria-describedby="nickname-error"
           className="border border-muted bg-background px-2 py-1 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground"

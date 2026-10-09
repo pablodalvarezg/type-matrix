@@ -79,5 +79,7 @@ export async function startDaily(
     puzzle,
     closesAt(date),
   );
-  return (await getDaily(playerId, puzzle, now))!.game;
+  // Just the game: streaks and leaderboard are the page's.
+  const games = await getDailyGames(playerId);
+  return games.find((g) => g.puzzle === puzzle)!;
 }

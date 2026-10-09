@@ -31,18 +31,20 @@ export default async function DailyGamePage({
       </header>
       <GuessBoard key={game.id} initial={game} names={speciesNames}>
         {streak && (
-          <div className="flex flex-col gap-6">
-            <p className="tabular-nums">
-              Streak: {streak.current} · best {streak.best}. A new puzzle comes
-              out tomorrow.
-            </p>
-            {askNickname && (
-              <NicknameForm prompt="Pick a nickname to join the leaderboard" />
-            )}
-            <Leaderboard rows={leaderboard ?? []} />
-          </div>
+          <p className="tabular-nums">
+            Streak: {streak.current} · best {streak.best}. A new puzzle comes
+            out tomorrow.
+          </p>
         )}
       </GuessBoard>
+      {/* Outside the board, whose live region would read the whole table. */}
+      {askNickname && (
+        <NicknameForm
+          prompt="Pick a nickname to join the leaderboard"
+          focusOnSave="leaderboard"
+        />
+      )}
+      {leaderboard && <Leaderboard rows={leaderboard} />}
     </main>
   );
 }
