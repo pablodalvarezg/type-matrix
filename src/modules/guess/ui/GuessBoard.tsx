@@ -138,7 +138,7 @@ export function GuessBoard({
           role="region"
           aria-label="Guesses"
           tabIndex={0}
-          className="overflow-x-auto focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground"
+          className="relative overflow-x-auto focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground"
         >
           <table className="w-full text-left text-sm tabular-nums">
             <caption className="sr-only">

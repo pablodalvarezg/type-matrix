@@ -63,6 +63,8 @@ vi.mock("@shared/config/env", () => ({
   },
 }));
 vi.mock("@shared/db/client", () => ({ sql: vi.fn() }));
+// Always under the cap; tests/throttle-routes.test.ts covers the 429.
+vi.mock("@shared/db/rate-limit", () => ({ hit: async () => 1 }));
 vi.mock("node:crypto", async (original) => ({
   ...(await original<typeof import("node:crypto")>()),
   randomInt: () => pick.index,

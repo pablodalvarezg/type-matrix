@@ -8,11 +8,12 @@ import {
   setNickname,
 } from "@modules/players";
 import { rejectUnlessJson } from "@shared/http/require-json";
+import { throttle } from "@shared/http/throttle";
 
 /**
  * Sets the caller's nickname; their first call also makes them a player.
- * TODO(pablo): no throttle yet, so a script that drops its cookie can claim
- * names in bulk. Left for the close-out (step 10).
+ * Throttled per IP, or a script that drops its cookie could claim names in bulk.
+ * A taken name counts too, on purpose: it slows probing for which ones exist.
  */
 export async function POST(request: Request) {
   const notJson = rejectUnlessJson(request);
@@ -25,6 +26,8 @@ export async function POST(request: Request) {
       { status: 400 },
     );
   }
+  const throttled = await throttle(request, "nickname");
+  if (throttled) return throttled;
 
   const store = await cookies();
   const { id, cookie } = identify(store.get(PLAYER_COOKIE)?.value);
