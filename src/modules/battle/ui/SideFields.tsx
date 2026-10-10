@@ -87,11 +87,10 @@ export function SideFields({
         </fieldset>
       ))}
 
-      <details open={spreadErrors.length > 0} className="flex flex-col gap-2">
-        <summary className="cursor-pointer text-sm text-muted">
-          IVs and EVs
-        </summary>
-        <div className="mt-2 grid grid-cols-[auto_repeat(6,minmax(0,1fr))] items-center gap-1">
+      {/* Block, not flex: a flex <details> does not animate its content. */}
+      <details open={spreadErrors.length > 0}>
+        <summary className="text-sm text-muted">IVs and EVs</summary>
+        <div className="mt-4 grid grid-cols-[auto_repeat(6,minmax(0,1fr))] items-center gap-1">
           <span />
           {STAT_NAMES.map((stat) => (
             <span
@@ -112,7 +111,7 @@ export function SideFields({
             />
           ))}
         </div>
-        <ul className="mt-1 flex flex-col text-sm">
+        <ul className="mt-3 flex flex-col text-sm">
           {spreadErrors.map(([name, message]) => (
             <li key={name} id={`${name}-error`}>
               ✕ {describeSpreadField(name)}: {message}

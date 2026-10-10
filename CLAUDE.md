@@ -99,7 +99,7 @@ Lo que hay hoy, no solo adónde van las cosas:
 src/
 ├─ app/                        # SOLO routing y composición
 │  ├─ layout.tsx               # html, body, tokens globales
-│  ├─ page.tsx                 # home: los cinco modos; los que existen, enlazados
+│  ├─ page.tsx                 # home: los cinco modos, cada tarjeta entera es el link
 │  ├─ (modes)/calculator/      # page.tsx: lee searchParams, llama al service
 │  ├─ (modes)/team/            # page.tsx: la misma forma
 │  ├─ (modes)/hangman/         # page.tsx: botón de partida nueva · [id]/page.tsx: el tablero
@@ -327,6 +327,36 @@ Reglas que no se negocian, porque son la tesis:
 - Tipografía: el stack monoespaciado del sistema (`--font-mono` de Tailwind), cero
   bytes de fuente. `TODO(pablo):` una fuente pixel para títulos, si pasa legibilidad.
 - **El feedback nunca depende solo del color**: flechas, símbolos y texto.
+- **El movimiento común vive en `globals.css`, no en cada componente:** la manito en
+  lo que se puede apretar (Tailwind 4 la saca de los botones), transiciones,
+  el botón que se levanta en hover y se hunde al apretar, y la entrada de los
+  bloques de `main`. Lo que aparece (una letra, un resultado) lleva
+  `animate-pop`; una fila de una tabla que scrollea, `animate-fade`, porque el
+  desplazamiento la desborda un instante. Si tiene que repetirse con cada dato
+  nuevo, se le da un `key` que cambie con el dato. Sombras con `shadow-pixel`.
+  Solo CSS, sin librería.
+  - **`backwards`, nunca `both`, en las animaciones:** un fill que sobrevive a
+    la animación deja cada bloque como contexto de apilamiento (tapaba la lista
+    del combobox) y Chromium nunca registra el LCP de la página.
+  - **Lo que se levanta, solo con `(hover: hover)` y sin movimiento reducido.**
+    En touch, un tap deja el `:hover` pegado. `prefers-reduced-motion` apaga
+    animaciones, transiciones y los desplazamientos de hover; la sombra y el
+    subrayado del hover quedan, porque no son movimiento.
+  - **El hover lo toma un elemento que no se mueve.** Si lo toma el que se
+    levanta, un puntero en su borde queda afuera después del lift y titila: en
+    la home el `<li>` es el `group` y el link de adentro es el que se mueve.
+    El `::after` del link se estira 1 px a la derecha y abajo, para que la
+    franja que el lift destapa siga siendo clickeable (verificado). El foco de
+    teclado (`group-focus-within`) da el mismo lift y subrayado que el hover.
+  - **El subrayado del título de una tarjeta es un fondo, no `text-decoration`:**
+    un degradado de 2 px que crece desde la izquierda en hover. Al salir, el
+    ancla pasa a la derecha y se achica, así que también se va de izquierda a
+    derecha. `text-decoration` no se puede animar así.
+  - **Un `<details>` se abre y se cierra animado** con `::details-content` e
+    `interpolate-size` (sin JS; donde no hay soporte, abre como siempre). El
+    `<details>` tiene que ser `display: block`: con `flex`, Chromium no anima
+    el contenido (verificado). `overflow-clip-margin` deja ver el anillo de
+    foco de los campos del borde.
 - Sin logos, sprites ni arte oficial. Todo ícono es propio, salvo el favicon
   (`src/app/icon.svg`): una Poké Ball, por decisión de Pablo del 2026-10-07.
 
@@ -445,6 +475,7 @@ portfolio y de Atlas. Si descubrís algo del entorno que costó averiguar, anota
   2026-10-09). El cierre de un puzzle se compara con el reloj de la app: para
   simularlo por SQL, `closes_at = now() - interval '1 minute'`, no un segundo.
 - **Una clase inválida de Tailwind no falla: no existe.** `max-w-75ch` compila a nada, en silencio. Los valores arbitrarios van entre corchetes: `max-w-[75ch]`. Si un estilo "no se aplica", buscá la clase en `.next/static/**/*.css`.
+- **Los `translate-*` de Tailwind 4 usan la propiedad `translate`, no `transform`.** Un `transition-[transform]` no los anima: va `transition-[translate]`.
 - **Los heredocs de esta terminal se comen un nivel de backslash, incluso citados.** Cualquier archivo con secuencias de escape se escribe con la herramienta de edición, no por heredoc.
 - **`npm audit` marca vulnerabilidades solo en dependencias de desarrollo** (cadena de ESLint y Vitest 3). `npm audit --omit=dev` da cero. Se resuelven con el salto de major de esas herramientas, como tarea propia.
 - **Node corre `.ts` directo** (type stripping), por eso `scripts/ingest.ts` no necesita `tsx`. Pero no resuelve los aliases de `tsconfig` ni importa `.ts` sin extensión: un script no puede importar código de `src/`. Sin `"type": "module"` en `package.json` avisa `MODULE_TYPELESS_PACKAGE_JSON`; el script npm lo silencia con `--disable-warning` en vez de cambiar el tipo de módulo de todo el repo.

@@ -32,6 +32,131 @@
   --color-surface: var(--surface);
   --color-muted: var(--muted);
   --color-foreground: var(--foreground);
+  /* A hard offset, no blur: the shadow a pixel sprite would have. */
+  --shadow-pixel: 2px 2px 0 var(--muted);
+  /*
+   * Whatever appears (a letter, a result) slides into place. `backwards`, not
+   * `both`: a fill that outlives the animation keeps every block a stacking
+   * context (it buried the combobox list under the next block) and Chromium
+   * never records the page's LCP.
+   */
+  --animate-pop: pop 180ms ease-out backwards;
+  /* Rows of a scrolling table only fade: a slide overflows it for a moment. */
+  --animate-fade: fade 180ms ease-out backwards;
+
+  @keyframes pop {
+    from {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+  }
+
+  @keyframes fade {
+    from {
+      opacity: 0;
+    }
+  }
+}
+
+/*
+ * Motion lives here rather than on each component, so every control moves the
+ * same way. Tailwind 4 resets buttons to the default cursor; the hand comes
+ * back on whatever can be pressed.
+ */
+@layer base {
+  button:not(:disabled, [aria-disabled="true"]),
+  summary,
+  [role="option"] {
+    cursor: pointer;
+  }
+
+  /* Tailwind's own duration and curve, the ones its transition utilities use. */
+  a,
+  button,
+  input,
+  summary {
+    transition-property:
+      color, background-color, border-color, box-shadow, transform,
+      text-decoration-color;
+    transition-duration: var(--default-transition-duration);
+    transition-timing-function: var(--default-transition-timing-function);
+  }
+
+  /*
+   * Hover feedback only with a real pointer: a tap would leave it stuck. The
+   * shadow and the thicker underline are not motion, so they stay with reduced
+   * motion; the lift and the press, which move, need motion allowed.
+   */
+  @media (hover: hover) {
+    a:hover {
+      text-decoration-thickness: 2px;
+    }
+
+    button:not(:disabled, [aria-disabled="true"]):hover {
+      box-shadow: var(--shadow-pixel);
+    }
+
+    button:not(:disabled, [aria-disabled="true"]):active {
+      box-shadow: none;
+    }
+  }
+
+  /* A lift on hover and a press on click, like a handheld's buttons. */
+  @media (hover: hover) and (prefers-reduced-motion: no-preference) {
+    button:not(:disabled, [aria-disabled="true"]):hover {
+      transform: translate(-1px, -1px);
+    }
+
+    button:not(:disabled, [aria-disabled="true"]):active {
+      transform: translate(1px, 1px);
+    }
+  }
+
+  /*
+   * A <details> (IVs and EVs) slides open and shut. interpolate-size lets the
+   * height transition to auto; where it is not supported, it opens as before.
+   * The clip margin keeps the focus ring of the fields at its edge visible.
+   */
+  @media (prefers-reduced-motion: no-preference) {
+    :root {
+      interpolate-size: allow-keywords;
+    }
+
+    details::details-content {
+      block-size: 0;
+      overflow: clip;
+      overflow-clip-margin: 4px;
+      transition:
+        block-size 250ms var(--default-transition-timing-function),
+        content-visibility 250ms allow-discrete;
+    }
+
+    details[open]::details-content {
+      block-size: auto;
+    }
+  }
+
+  /* Each page's blocks come in one after another. */
+  main > * {
+    animation: var(--animate-pop);
+  }
+
+  main > :nth-child(2) {
+    animation-delay: 40ms;
+  }
+
+  main > :nth-child(n + 3) {
+    animation-delay: 80ms;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+  }
 }
 
 /*

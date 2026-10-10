@@ -161,7 +161,7 @@ export function GuessBoard({
             </thead>
             <tbody>
               {game.rows.map((row) => (
-                <tr key={row.name}>
+                <tr key={row.name} className="animate-fade">
                   <th scope="row" className="py-1 pr-3 whitespace-nowrap">
                     {row.name}
                   </th>
@@ -180,7 +180,7 @@ export function GuessBoard({
             </tbody>
             {game.answer && (
               <tfoot>
-                <tr className="border-t border-muted font-bold">
+                <tr className="animate-fade border-t border-muted font-bold">
                   <th scope="row" className="py-1 pr-3 whitespace-nowrap">
                     <span className="sr-only">Answer: </span>
                     {game.answer.name}
@@ -214,7 +214,9 @@ export function GuessBoard({
       </p>
 
       {over ? (
-        <div aria-live="polite">{children}</div>
+        <div aria-live="polite" className="animate-pop">
+          {children}
+        </div>
       ) : (
         <form
           ref={form}
@@ -232,6 +234,9 @@ export function GuessBoard({
           </div>
           <button
             type="submit"
+            // aria-disabled, not disabled, like the hangman letters: it keeps
+            // the focus, and `submit` already ignores a click while pending.
+            aria-disabled={pending}
             className="border border-foreground bg-foreground px-4 py-1 font-bold text-background focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground"
           >
             {pending ? "Checking…" : "Guess"}
