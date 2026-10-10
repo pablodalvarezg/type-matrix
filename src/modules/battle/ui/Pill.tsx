@@ -21,7 +21,7 @@ export function Pill({ type, name, label, value, defaultChecked }: PillProps) {
         defaultChecked={defaultChecked}
         className="peer sr-only"
       />
-      <span className="border border-muted px-2 py-1 text-sm peer-checked:bg-foreground peer-checked:text-background peer-checked:underline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-foreground">
+      <span className="border border-muted px-2 py-1 text-sm transition-colors hover:border-foreground peer-checked:bg-foreground peer-checked:text-background peer-checked:underline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-foreground">
         {label}
       </span>
     </label>

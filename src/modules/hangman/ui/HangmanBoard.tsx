@@ -67,7 +67,15 @@ export function HangmanBoard({ initial }: { initial: Game }) {
     <section className="flex flex-col gap-6 border border-muted bg-surface p-4">
       <p className="text-3xl font-bold break-all whitespace-pre-wrap tracking-widest">
         <span aria-hidden="true">
-          {game.mask.map((char) => char ?? "_").join("")}
+          {/* Keyed by what it shows, so a revealed letter mounts and pops in. */}
+          {game.mask.map((char, index) => (
+            <span
+              key={`${index}:${char ?? "_"}`}
+              className={char?.trim() ? "inline-block animate-pop" : undefined}
+            >
+              {char ?? "_"}
+            </span>
+          ))}
         </span>
         <span className="sr-only">The name: {spoken}</span>
       </p>

@@ -161,7 +161,7 @@ export function Combobox({
       />
       <div
         hidden={!expanded}
-        className="absolute top-full z-10 mt-1 w-full border border-muted bg-surface"
+        className="absolute top-full z-10 mt-1 w-full animate-pop border border-muted bg-surface shadow-pixel"
       >
         <ul
           id={listId}
@@ -181,7 +181,7 @@ export function Combobox({
                 choose(option);
               }}
               onMouseMove={() => setActive(index)}
-              className="cursor-pointer px-2 py-1 aria-selected:bg-background aria-selected:underline"
+              className="px-2 py-1 aria-selected:bg-background aria-selected:underline"
             >
               <span aria-hidden className="inline-block w-3">
                 {index === active ? "›" : ""}

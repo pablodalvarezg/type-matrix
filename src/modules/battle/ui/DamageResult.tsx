@@ -26,7 +26,8 @@ export function DamageResult({ result }: DamageResultProps) {
         Result
       </h2>
       {result ? (
-        <Breakdown result={result} />
+        // Keyed by the whole result, so any new number pops it in.
+        <Breakdown key={JSON.stringify(result)} result={result} />
       ) : (
         <p className="text-muted">Pick an attacker, a defender and a move.</p>
       )}
@@ -44,7 +45,7 @@ function Breakdown({
   const max = Math.max(...rolls);
 
   return (
-    <>
+    <div className="flex animate-pop flex-col gap-3">
       <p>
         {result.attacker}&apos;s {move.name} against {result.defender}
       </p>
@@ -92,7 +93,7 @@ function Breakdown({
           ))}
         </ol>
       </div>
-    </>
+    </div>
   );
 }
 

@@ -40,22 +40,27 @@ export default function Home() {
       </header>
 
       <ul className="flex flex-col gap-3">
+        {/* The whole card is the link. The li, which never moves, takes the
+            hover: if the lifted card took it, a pointer on its edge would
+            fall off after the lift and the card would flicker. The link's
+            ::after reaches 1px past its right and bottom, so the strip the
+            lift uncovers still clicks. Keyboard focus gets the same lift. */}
         {modes.map((mode) => (
-          <li
-            key={mode.name}
-            className="flex flex-col gap-1 border border-muted bg-surface p-4"
-          >
-            {mode.href ? (
-              <Link href={mode.href} className="font-bold underline">
+          <li key={mode.name} className="group">
+            <Link
+              href={mode.href}
+              className="relative flex flex-col gap-1 border border-muted bg-surface p-4 transition-[translate,box-shadow] group-focus-within:shadow-pixel group-hover:shadow-pixel after:absolute after:-inset-px after:-right-0.5 after:-bottom-0.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground motion-safe:group-focus-within:-translate-x-px motion-safe:group-focus-within:-translate-y-px motion-safe:group-hover:-translate-x-px motion-safe:group-hover:-translate-y-px"
+            >
+              {/* The underline is a background that grows from the left on
+                  hover; on leave it anchors right and shrinks, so it leaves
+                  left to right too. Leaving mid-sweep makes the partial bar
+                  jump to the right edge: any CSS that avoids the jump breaks
+                  that direction on a full leave. */}
+              <span className="self-start bg-[linear-gradient(currentColor,currentColor)] bg-size-[0_2px] bg-position-[right_bottom] bg-no-repeat pb-px font-bold transition-[background-size] duration-300 group-focus-within:bg-size-[100%_2px] group-focus-within:bg-position-[left_bottom] group-hover:bg-size-[100%_2px] group-hover:bg-position-[left_bottom]">
                 {mode.name}
-              </Link>
-            ) : (
-              <span className="font-bold">{mode.name}</span>
-            )}
-            <span className="text-muted">{mode.blurb}</span>
-            {!mode.href && (
-              <span className="text-sm text-muted">[ coming soon ]</span>
-            )}
+              </span>
+              <span className="text-muted">{mode.blurb}</span>
+            </Link>
           </li>
         ))}
       </ul>

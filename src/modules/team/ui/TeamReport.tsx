@@ -46,7 +46,12 @@ export function TeamReport(props: TeamReportProps) {
       <p aria-live="polite" className={props.result ? undefined : "text-muted"}>
         {summary(props)}
       </p>
-      {props.result && <Report result={props.result} />}
+      {props.result && (
+        <Report
+          key={props.result.members.map((member) => member.name).join()}
+          result={props.result}
+        />
+      )}
     </section>
   );
 }
@@ -57,7 +62,7 @@ function Report({
   result: NonNullable<TeamReportProps["result"]>;
 }) {
   return (
-    <>
+    <div className="flex animate-pop flex-col gap-6">
       <ul className="flex flex-wrap gap-x-4 text-sm">
         {result.members.map((member) => (
           <li key={member.name}>
@@ -174,6 +179,6 @@ function Report({
           </p>
         )}
       </div>
-    </>
+    </div>
   );
 }
