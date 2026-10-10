@@ -41,6 +41,29 @@ export function shuffle(
   return [...pool].sort((a, b) => (keys.get(a)! < keys.get(b)! ? -1 : 1));
 }
 
+/** Puzzle `n`'s species in a shuffled `order`. */
+export const dailyAnswer = (order: readonly string[], n: number) =>
+  order[n % order.length]!;
+
+/**
+ * `order` with no position holding what `other` holds there, so two rounds
+ * never share a day's species. Each clash swaps with the next position: still
+ * a permutation, so no species repeats within a cycle. Both are permutations
+ * of one pool, so neither swapped entry can clash where it lands.
+ */
+export function apart(
+  order: readonly string[],
+  other: readonly string[],
+): string[] {
+  const result = [...order];
+  for (let i = 0; i < result.length; i++) {
+    if (result[i] !== other[i]) continue;
+    const next = (i + 1) % result.length;
+    [result[i], result[next]] = [result[next]!, result[i]!];
+  }
+  return result;
+}
+
 /** One finished daily game. */
 export interface Result {
   puzzle: number;
@@ -67,16 +90,4 @@ export function streaks(
     current: runTo(played ? today : today - 1),
     best: Math.max(0, ...[...won].filter((n) => !won.has(n + 1)).map(runTo)),
   };
-}
-
-/** A leaderboard time: m:ss, or h:mm:ss from an hour on. Seconds floor. */
-export function duration(ms: number): string {
-  const seconds = Math.floor(ms / 1000);
-  const pad = (n: number) => String(n).padStart(2, "0");
-  const [h, m, s] = [
-    Math.floor(seconds / 3600),
-    Math.floor(seconds / 60) % 60,
-    seconds % 60,
-  ];
-  return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${m}:${pad(s)}`;
 }

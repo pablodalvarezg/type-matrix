@@ -5,6 +5,7 @@ import {
   createGame,
   findDailyGames,
   findGame,
+  giveUp,
 } from "@modules/guess/guess.repository";
 
 const sql = vi.hoisted(() => vi.fn());
@@ -26,12 +27,14 @@ describe("guess repository", () => {
         species_slug: "mr-mime",
         guesses: ["bulbasaur", "ivysaur"],
         closes_at: null,
+        given_up_at: null,
       },
     ]);
     expect(await findGame(GAME, PLAYER)).toEqual({
       speciesSlug: "mr-mime",
       guesses: ["bulbasaur", "ivysaur"],
       closesAt: null,
+      givenUp: false,
     });
   });
 
@@ -50,6 +53,12 @@ describe("guess repository", () => {
     expect(await addGuess(GAME, PLAYER, 2, "venusaur")).toBe(false);
   });
 
+  it("gives up only when no guess landed first", async () => {
+    sql.mockResolvedValueOnce([{ id: GAME }]).mockResolvedValueOnce([]);
+    expect(await giveUp(GAME, PLAYER, 2)).toBe(true);
+    expect(await giveUp(GAME, PLAYER, 2)).toBe(false);
+  });
+
   it("maps the player's daily games", async () => {
     sql.mockResolvedValueOnce([
       {
@@ -58,6 +67,7 @@ describe("guess repository", () => {
         species_slug: "mr-mime",
         guesses: ["bulbasaur"],
         closes_at: new Date("2026-10-10T12:00:00Z"),
+        given_up_at: new Date("2026-10-09T13:00:00Z"),
       },
     ]);
     expect(await findDailyGames(PLAYER)).toEqual([
@@ -67,6 +77,7 @@ describe("guess repository", () => {
         speciesSlug: "mr-mime",
         guesses: ["bulbasaur"],
         closesAt: new Date("2026-10-10T12:00:00Z"),
+        givenUp: true,
       },
     ]);
   });

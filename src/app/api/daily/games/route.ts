@@ -7,10 +7,12 @@ import { rejectUnlessJson } from "@shared/http/require-json";
 import { throttle } from "@shared/http/throttle";
 
 /**
- * Starts the caller's game for today's puzzle, or returns the one they have.
- * Guesses go to the Stats & types endpoint, like any other game of theirs.
+ * Starts the caller's game in one round of today's puzzle, or returns the
+ * one they have. Guesses go to that mode's endpoint, like any other game of
+ * theirs.
  * Only a new player is throttled: a known one has at most one game per
- * puzzle, so returning to it, the button's usual job, adds no rows.
+ * puzzle and mode (two or three puzzles are open at once), so returning to
+ * one, the button's usual job, adds no rows.
  */
 export async function POST(request: Request) {
   const notJson = rejectUnlessJson(request);
@@ -32,7 +34,7 @@ export async function POST(request: Request) {
     const throttled = await throttle(request, "games");
     if (throttled) return throttled;
   }
-  const game = await startDaily(id, body.data.date);
+  const game = await startDaily(body.data.mode, id, body.data.date);
   if (game === "not-today") {
     return Response.json(
       { error: "That date is not today anywhere" },

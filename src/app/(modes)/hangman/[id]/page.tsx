@@ -5,12 +5,11 @@ import { notFound } from "next/navigation";
 
 import { getGame, HangmanBoard } from "@modules/hangman";
 import { identify, PLAYER_COOKIE } from "@modules/players";
+import { NewGameButton } from "@shared/ui/NewGameButton";
 
 export const metadata: Metadata = { title: "Hangman · Type Matrix" };
 
 // The board gets the same view the API returns: no answer until it is over.
-// Its key carries the letters, so a refresh that finds the game further on
-// remounts it instead of keeping the stale state.
 export default async function GamePage({ params }: PageProps<"/hangman/[id]">) {
   const { id } = await params;
   const store = await cookies();
@@ -28,10 +27,9 @@ export default async function GamePage({ params }: PageProps<"/hangman/[id]">) {
         </Link>
         <h1 className="text-3xl font-bold">Hangman</h1>
       </header>
-      <HangmanBoard
-        key={`${game.id}:${game.guessed.join("")}`}
-        initial={game}
-      />
+      <HangmanBoard key={game.id} initial={game}>
+        <NewGameButton mode="hangman" label="Play again" />
+      </HangmanBoard>
     </main>
   );
 }

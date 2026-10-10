@@ -6,6 +6,9 @@ export type Stat = (typeof STATS)[number];
 
 export type Status = "playing" | "won" | "lost";
 
+/** What ends a game before its guesses do: a daily puzzle closing, or the player. */
+export type Stop = "closed" | "gave-up";
+
 /** A species as this game sees it: what a guess shows and is compared on. */
 export interface Entry {
   name: string;
@@ -21,6 +24,8 @@ export type Arrow = "higher" | "lower" | "equal";
 
 export interface Row extends Entry {
   typeMatch: TypeMatch;
+  /** One per type of the guess, in its order: whether the answer has it. */
+  typeHits: boolean[];
   arrows: Record<Stat, Arrow>;
 }
 
@@ -29,6 +34,8 @@ export interface Progress {
   rows: Row[];
   remaining: number;
   status: Status;
+  /** Why a lost game ended early, if it did. */
+  stopped?: Stop;
   answer?: Entry;
 }
 
@@ -47,6 +54,7 @@ export function compare(guess: Entry, answer: Entry): Row {
     types: guess.types,
     stats: guess.stats,
     typeMatch: typeMatch(guess.types, answer.types),
+    typeHits: guess.types.map((type) => answer.types.includes(type)),
     arrows: Object.fromEntries(
       STATS.map((stat) => [stat, arrow(guess.stats[stat], answer.stats[stat])]),
     ) as Record<Stat, Arrow>,
@@ -54,17 +62,20 @@ export function compare(guess: Entry, answer: Entry): Row {
 }
 
 /**
- * `guesses` in order. A guess is the answer when its name is. A `closed`
- * game (a daily puzzle no longer today anywhere) is lost unless won.
+ * `guesses` in order. A guess is the answer when its name is. A `stop` (a
+ * daily puzzle no longer today anywhere, or the player giving up) loses a
+ * game that is not won yet.
  */
 export function progress(
   answer: Entry,
   guesses: Entry[],
-  closed = false,
+  stop?: Stop,
 ): Progress {
-  const status: Status = guesses.some((guess) => guess.name === answer.name)
+  const won = guesses.some((guess) => guess.name === answer.name);
+  const outOfGuesses = guesses.length >= MAX_GUESSES;
+  const status: Status = won
     ? "won"
-    : closed || guesses.length >= MAX_GUESSES
+    : stop || outOfGuesses
       ? "lost"
       : "playing";
 
@@ -72,6 +83,9 @@ export function progress(
     rows: guesses.map((guess) => compare(guess, answer)),
     remaining: MAX_GUESSES - guesses.length,
     status,
+    // Only if the stop is what ended it: a game already out of guesses was
+    // lost before its puzzle closed.
+    ...(!won && !outOfGuesses && stop && { stopped: stop }),
     ...(status !== "playing" && {
       answer: { name: answer.name, types: answer.types, stats: answer.stats },
     }),

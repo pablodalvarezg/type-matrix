@@ -1,6 +1,6 @@
 # 0005. The daily puzzle is a Stats & types game, computed and not stored
 
-**Status:** accepted, 2026-10-09
+**Status:** accepted, 2026-10-09. Amended by 0007: a Hangman round joins it.
 
 ## Context
 

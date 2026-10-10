@@ -1,9 +1,10 @@
-import { duration } from "@modules/daily/domain/daily";
+import { duration } from "@modules/daily/domain/time";
 
 interface Row {
   place: number;
   nickname: string;
-  guesses: number;
+  /** Guesses or misses, as `metric` says. */
+  score: number;
   ms: number;
   you: boolean;
 }
@@ -12,7 +13,13 @@ interface Row {
  * The top 10, then the player's own row if it falls further down. The
  * section stays put when its rows change, so it can keep the focus.
  */
-export function Leaderboard({ rows }: { rows: Row[] }) {
+export function Leaderboard({
+  rows,
+  metric,
+}: {
+  rows: Row[];
+  metric: "guesses" | "misses";
+}) {
   return (
     <section
       id="leaderboard"
@@ -27,7 +34,7 @@ export function Leaderboard({ rows }: { rows: Row[] }) {
       ) : (
         <table className="w-full text-left text-sm tabular-nums">
           <caption className="mb-2 text-left font-bold">
-            Leaderboard: fewest guesses, then fastest
+            Leaderboard: fewest {metric}, then fastest
           </caption>
           <thead>
             <tr className="border-b border-muted">
@@ -37,8 +44,8 @@ export function Leaderboard({ rows }: { rows: Row[] }) {
               <th scope="col" className="py-1 pr-3">
                 Player
               </th>
-              <th scope="col" className="py-1 pr-3">
-                Guesses
+              <th scope="col" className="py-1 pr-3 capitalize">
+                {metric}
               </th>
               <th scope="col" className="py-1 pr-3">
                 Time
@@ -59,7 +66,7 @@ export function Leaderboard({ rows }: { rows: Row[] }) {
                   {row.nickname}
                   {row.you && " (you)"}
                 </th>
-                <td className="py-1 pr-3">{row.guesses}</td>
+                <td className="py-1 pr-3">{row.score}</td>
                 <td className="py-1 pr-3">{duration(row.ms)}</td>
               </tr>
             ))}

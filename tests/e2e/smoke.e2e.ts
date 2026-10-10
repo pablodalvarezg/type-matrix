@@ -18,6 +18,9 @@ test("home: the five modes, linked", async ({ page }) => {
   for (const href of ["/calculator", "/team", "/hangman", "/guess", "/daily"]) {
     await expect(page.locator(`main a[href="${href}"]`)).toBeVisible();
   }
+  await expect(page.getByText(/Next puzzle in \d+:\d\d/)).toBeVisible();
+  // The link's name is the title alone, not the ticking countdown.
+  await expect(page.getByRole("link", { name: "Daily puzzle" })).toBeVisible();
 });
 
 test("calculator: a damage range for a matchup", async ({ page }) => {
@@ -55,11 +58,66 @@ test("hangman: a game played to the end", async ({ page }) => {
   await page.goto("/hangman");
   await page.getByRole("button", { name: "New game" }).click();
   await page.waitForURL(/\/hangman\/[\w-]+$/);
+  await spellOut(page);
+  await expect(page.getByRole("button", { name: "Play again" })).toBeVisible();
+});
 
+test("stats & types: resumed from the breadcrumb, then given up", async ({
+  page,
+}) => {
+  await page.goto("/guess");
+  await page.getByRole("button", { name: "New game" }).click();
+  await page.waitForURL(/\/guess\/[\w-]+$/);
+  const game = page.url();
+  await page.getByRole("combobox", { name: "Species" }).fill("Bulbasaur");
+  await page.getByRole("button", { name: "Guess" }).click();
+  await expect(page.getByRole("status").first()).toContainText("Bulbasaur:");
+
+  // Leaving keeps the game open: the mode's page offers it back.
+  await page.getByRole("link", { name: "← Stats & types" }).click();
+  await page.getByRole("link", { name: "Continue your game" }).click();
+  await page.waitForURL(game);
+  await expect(page.getByRole("region", { name: "Guesses" })).toContainText(
+    "Bulbasaur",
+  );
+
+  page.once("dialog", (dialog) => dialog.accept());
+  await page.getByRole("button", { name: "Give up" }).click();
+  await expect(page.getByRole("status").first()).toContainText(
+    /You gave up\. It was /,
+  );
+  await expect(page.getByRole("button", { name: "Play again" })).toBeVisible();
+});
+
+test("daily stats & types: played out, with its streak", async ({ page }) => {
+  await page.goto("/daily");
+  await page
+    .getByRole("button", { name: "Play today's Stats & types" })
+    .click();
+  await page.waitForURL(/\/daily\/guess\/\d+$/);
+  await expect(
+    page.getByRole("heading", { name: /Daily Stats & types #\d+/ }),
+  ).toBeVisible();
+  await playOut(page);
+  await expect(page.getByText(/Streak: \d+ · best \d+/)).toBeVisible();
+});
+
+test("daily hangman: played out, with its streak", async ({ page }) => {
+  await page.goto("/daily");
+  await page.getByRole("button", { name: "Play today's Hangman" }).click();
+  await page.waitForURL(/\/daily\/hangman\/\d+$/);
+  await expect(
+    page.getByRole("heading", { name: /Daily Hangman #\d+/ }),
+  ).toBeVisible();
+  await spellOut(page);
+  await expect(page.getByText(/Streak: \d+ · best \d+/)).toBeVisible();
+});
+
+/** Tries letters until the game ends; six misses at most, so it always does. */
+async function spellOut(page: Page) {
   const status = page
     .getByRole("status")
     .filter({ hasText: /left|Got it|It was/ });
-  // At most six misses, so the alphabet always ends the game.
   for (const letter of "eaoirnltsucmpdhgbkyfwvzxjq") {
     if (OVER.test(await status.innerText())) break;
     await page.getByRole("button", { name: letter, exact: true }).click();
@@ -71,25 +129,7 @@ test("hangman: a game played to the end", async ({ page }) => {
     ).toBeVisible();
   }
   await expect(status).toContainText(OVER);
-});
-
-test("stats & types: a game played to the end", async ({ page }) => {
-  await page.goto("/guess");
-  await page.getByRole("button", { name: "New game" }).click();
-  await page.waitForURL(/\/guess\/[\w-]+$/);
-  await playOut(page);
-});
-
-test("daily: today's puzzle, its streak and leaderboard", async ({ page }) => {
-  await page.goto("/daily");
-  await page.getByRole("button", { name: "Play today's puzzle" }).click();
-  await page.waitForURL(/\/daily\/\d+$/);
-  await expect(
-    page.getByRole("heading", { name: /Daily puzzle #\d+/ }),
-  ).toBeVisible();
-  await playOut(page);
-  await expect(page.getByText(/Streak: \d+ · best \d+/)).toBeVisible();
-});
+}
 
 /** Guesses distinct species until the game ends; eight are always enough. */
 async function playOut(page: Page) {
@@ -112,9 +152,7 @@ async function playOut(page: Page) {
     if (!(await field.isVisible())) break;
     await field.fill(name);
     await page.getByRole("button", { name: "Guess" }).click();
-    await expect(status).toContainText(
-      new RegExp(`${name}: types|Got it|It was`),
-    );
+    await expect(status).toContainText(new RegExp(`${name}:|Got it|It was`));
   }
   await expect(status).toContainText(OVER);
 }

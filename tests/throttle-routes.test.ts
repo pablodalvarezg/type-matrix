@@ -59,7 +59,7 @@ describe("routes over the cap", () => {
     ["nickname", () => nicknameRoute(post({ nickname: "ash_1" }))],
     ["hangman", () => hangmanRoute(post())],
     ["guess", () => guessRoute(post())],
-    ["daily", () => dailyRoute(post({ date: "2026-10-09" }))],
+    ["daily", () => dailyRoute(post({ date: "2026-10-09", mode: "guess" }))],
   ])("%s answers 429 and issues no cookie", async (_, call) => {
     expect((await call()).status).toBe(429);
     expect(over.hit).toHaveBeenCalledOnce();
@@ -69,7 +69,9 @@ describe("routes over the cap", () => {
   it("daily lets a known player back to their game", async () => {
     const id = "3f2b8c1e-5d4a-4e6f-9b7c-0a1d2e3f4a5b";
     jar.set("player", signPlayerId(id, "c".repeat(32)));
-    expect((await dailyRoute(post({ date: "2026-10-09" }))).status).toBe(201);
+    expect(
+      (await dailyRoute(post({ date: "2026-10-09", mode: "guess" }))).status,
+    ).toBe(201);
     expect(over.hit).not.toHaveBeenCalled();
   });
 });

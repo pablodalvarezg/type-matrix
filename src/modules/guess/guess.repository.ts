@@ -5,9 +5,18 @@ export interface GameRow {
   guesses: string[];
   /** Daily games only: when the puzzle stops being today anywhere. */
   closesAt: Date | null;
+  givenUp: boolean;
 }
 
 const closesAt = (value: unknown) => (value ? new Date(value as string) : null);
+
+type Row = Record<string, unknown>;
+const gameRow = (row: Row): GameRow => ({
+  speciesSlug: row.species_slug as string,
+  guesses: row.guesses as string[],
+  closesAt: closesAt(row.closes_at),
+  givenUp: row.given_up_at != null,
+});
 
 /** Creates the game, and the player too if this is their first save. */
 export async function createGame(
@@ -30,20 +39,29 @@ export async function findGame(
   playerId: string,
 ): Promise<GameRow | undefined> {
   const [row] = await sql`
-    SELECT species_slug, guesses, closes_at FROM guess_games
+    SELECT species_slug, guesses, closes_at, given_up_at FROM guess_games
     WHERE id = ${id} AND player_id = ${playerId}`;
-  return (
-    row && {
-      speciesSlug: row.species_slug,
-      guesses: row.guesses,
-      closesAt: closesAt(row.closes_at),
-    }
-  );
+  return row && gameRow(row);
+}
+
+/**
+ * The player's latest free-play game. Only it can still be open: a new one
+ * is made only once it is over.
+ */
+export async function findLatestGame(
+  playerId: string,
+): Promise<(GameRow & { id: string }) | undefined> {
+  const [row] = await sql`
+    SELECT id, species_slug, guesses, closes_at, given_up_at FROM guess_games
+    WHERE player_id = ${playerId} AND puzzle IS NULL
+    ORDER BY created_at DESC LIMIT 1`;
+  return row && { id: row.id as string, ...gameRow(row) };
 }
 
 /**
  * Appends a guess only if no other one landed since `count` guesses were
- * read, so two at once cannot both pass the cap. False if one did. The
+ * read and the game was not given up, so two at once cannot both pass the
+ * cap and a give-up cannot be overtaken. False if either happened. The
  * winning guess stamps `won_at`: the last one, since a won game takes none.
  */
 export async function addGuess(
@@ -56,7 +74,21 @@ export async function addGuess(
     UPDATE guess_games SET guesses = array_append(guesses, ${slug}),
       won_at = CASE WHEN species_slug = ${slug} THEN now() END
     WHERE id = ${id} AND player_id = ${playerId}
-      AND cardinality(guesses) = ${count}
+      AND cardinality(guesses) = ${count} AND given_up_at IS NULL
+    RETURNING id`;
+  return rows.length === 1;
+}
+
+/** Gives the game up, unless a guess landed since `count` were read. */
+export async function giveUp(
+  id: string,
+  playerId: string,
+  count: number,
+): Promise<boolean> {
+  const rows = await sql`
+    UPDATE guess_games SET given_up_at = now()
+    WHERE id = ${id} AND player_id = ${playerId}
+      AND cardinality(guesses) = ${count} AND given_up_at IS NULL
     RETURNING id`;
   return rows.length === 1;
 }
@@ -82,14 +114,13 @@ export async function findDailyGames(
   playerId: string,
 ): Promise<(GameRow & { id: string; puzzle: number })[]> {
   const rows = await sql`
-    SELECT id, puzzle, species_slug, guesses, closes_at FROM guess_games
+    SELECT id, puzzle, species_slug, guesses, closes_at, given_up_at
+    FROM guess_games
     WHERE player_id = ${playerId} AND puzzle IS NOT NULL`;
   return rows.map((row) => ({
-    id: row.id,
-    puzzle: row.puzzle,
-    speciesSlug: row.species_slug,
-    guesses: row.guesses,
-    closesAt: closesAt(row.closes_at),
+    id: row.id as string,
+    puzzle: row.puzzle as number,
+    ...gameRow(row),
   }));
 }
 

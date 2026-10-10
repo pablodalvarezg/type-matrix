@@ -4,9 +4,10 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 /**
- * Starts a game of `mode` on the server and opens it. Every mode has
- * `/api/<mode>/games` and a page at `/<mode>/<id>`, except the daily one: it
- * sends the local date, and its page is the puzzle number.
+ * Starts a game of `mode` on the server and opens it: `/api/<mode>/games`,
+ * then `/<mode>/<id>`. A `daily` one goes to `/api/daily/games` with the
+ * local date, and its page is `/daily/<mode>/<puzzle>`. Either endpoint hands
+ * back the game already open, if there is one.
  */
 /** YYYY-MM-DD in the browser's time zone, whatever its locale. */
 function localDate() {
@@ -17,9 +18,11 @@ function localDate() {
 
 export function NewGameButton({
   mode,
+  daily = false,
   label,
 }: {
-  mode: "hangman" | "guess" | "daily";
+  mode: "hangman" | "guess";
+  daily?: boolean;
   label: string;
 }) {
   const router = useRouter();
@@ -29,11 +32,10 @@ export function NewGameButton({
   async function start() {
     setPending(true);
     setError(undefined);
-    const response = await fetch(`/api/${mode}/games`, {
+    const response = await fetch(`/api/${daily ? "daily" : mode}/games`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body:
-        mode === "daily" ? JSON.stringify({ date: localDate() }) : undefined,
+      body: daily ? JSON.stringify({ date: localDate(), mode }) : undefined,
     }).catch(() => null);
     const body = await response?.json().catch(() => null);
     if (!response?.ok || !body) {
@@ -42,7 +44,7 @@ export function NewGameButton({
       return;
     }
     const { id, puzzle } = body as { id: string; puzzle?: number };
-    router.push(`/${mode}/${puzzle ?? id}`);
+    router.push(daily ? `/daily/${mode}/${puzzle}` : `/${mode}/${id}`);
   }
 
   return (
