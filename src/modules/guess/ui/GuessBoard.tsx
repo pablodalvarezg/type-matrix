@@ -14,8 +14,8 @@ import {
   type Arrow,
   type Entry,
   type Progress,
+  type Row,
   type Stat,
-  type TypeMatch,
 } from "@modules/guess/domain/guess";
 import { Combobox } from "@shared/ui/Combobox";
 
@@ -36,11 +36,9 @@ const ARROWS: Record<Arrow, [string, string]> = {
   lower: ["↓", "the answer's is lower"],
   equal: ["=", "equal"],
 };
-const MATCHES: Record<TypeMatch, [string, string]> = {
-  exact: ["✓", "exact"],
-  partial: ["~", "one shared"],
-  none: ["✗", "none shared"],
-};
+const HIT: [string, string] = ["✓", "in the answer"];
+const MISS: [string, string] = ["✗", "not in the answer"];
+const EXACT: [string, string] = ["=", "exactly its types"];
 
 function Feedback({ mark: [symbol, words] }: { mark: [string, string] }) {
   return (
@@ -54,10 +52,35 @@ function Feedback({ mark: [symbol, words] }: { mark: [string, string] }) {
 
 const typesOf = (entry: Entry) => entry.types.join(" / ");
 
+/** Each type of a guess with its own mark, and = when they are the answer's. */
+function TypeHits({ row }: { row: Row }) {
+  return (
+    <>
+      {row.types.map((type, index) => (
+        <span key={type}>
+          {index > 0 && " / "}
+          {type}
+          <Feedback mark={row.typeHits[index] ? HIT : MISS} />
+        </span>
+      ))}
+      {row.typeMatch === "exact" && <Feedback mark={EXACT} />}
+    </>
+  );
+}
+
+/** What a guess said about the types, for the status line. */
+const typesSaid = (row: Row) =>
+  row.typeMatch === "exact"
+    ? "exactly the answer's types"
+    : row.types
+        .map((type, i) => `${type} ${row.typeHits[i] ? HIT[1] : MISS[1]}`)
+        .join(", ");
+
 /*
  * The board holds only what the server sent: one row per guess with its
  * feedback. Each guess is a POST and the response replaces the whole game,
- * so the answer reaches this component only in the response that ends it.
+ * so the answer reaches this component only in the response that ends it,
+ * or in the one that gives it up.
  * The species names are the guess space, every one of them.
  *
  * A 409 means the page payload is behind the server (back and forward reuse
@@ -65,7 +88,7 @@ const typesOf = (entry: Entry) => entry.types.join(" / ");
  * refreshes too, so the page can render `children`, what comes after it,
  * from the server: a new game, or the streak. Either way the board keeps
  * its place, and with it focus and message, and takes the server's game
- * unless it is itself further on.
+ * only when it is further on.
  */
 export function GuessBoard({
   initial,
@@ -78,9 +101,16 @@ export function GuessBoard({
 }) {
   const router = useRouter();
   const [game, setGame] = useState(initial);
-  if (initial !== game && initial.rows.length >= game.rows.length) {
-    setGame(initial);
-  }
+  // The server's game is further on with more guesses, or with as many and
+  // over while this one still plays (refreshed after a give-up elsewhere).
+  // Not otherwise: this board's own give-up must not be undone by the stale
+  // payload it had before.
+  const serverAhead =
+    initial.rows.length > game.rows.length ||
+    (initial.rows.length === game.rows.length &&
+      initial.status !== "playing" &&
+      game.status === "playing");
+  if (initial !== game && serverAhead) setGame(initial);
   const [pending, setPending] = useState(false);
   const [message, setMessage] = useState<string>();
   const form = useRef<HTMLFormElement>(null);
@@ -98,39 +128,62 @@ export function GuessBoard({
     else form.current?.querySelector("input")?.focus();
   }, [count, over]);
 
-  async function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const species = String(
-      new FormData(event.currentTarget).get("species") ?? "",
-    ).trim();
-    if (pending || !species) return;
+  /** POSTs to the game, then takes the response as the game. */
+  async function send(
+    path: string,
+    body: object,
+    said: (next: Game) => string,
+  ) {
     played.current = true;
     setPending(true);
     setMessage(undefined);
-    const response = await fetch(`/api/guess/games/${game.id}/guesses`, {
+    const response = await fetch(`/api/guess/games/${game.id}/${path}`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ species }),
+      body: JSON.stringify(body),
     }).catch(() => null);
-    const body = await response?.json().catch(() => null);
-    if (response?.ok && body) {
-      const next = body as Game;
+    const data = await response?.json().catch(() => null);
+    if (response?.ok && data) {
+      const next = data as Game;
       setGame(next);
-      const row = next.rows.at(-1);
-      if (row) setMessage(`${row.name}: types ${MATCHES[row.typeMatch][1]}.`);
+      setMessage(said(next));
       if (next.status !== "playing") router.refresh();
     } else {
-      setMessage(body?.error ?? "Could not reach the server. Try again.");
+      setMessage(data?.error ?? "Could not reach the server. Try again.");
       if (response?.status === 409) router.refresh();
     }
     setPending(false);
   }
 
+  function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const species = String(
+      new FormData(event.currentTarget).get("species") ?? "",
+    ).trim();
+    if (pending || !species) return;
+    void send("guesses", { species }, (next) => {
+      const row = next.rows.at(-1);
+      return row ? `${row.name}: ${typesSaid(row)}.` : "";
+    });
+  }
+
+  function giveUp() {
+    if (pending || !window.confirm("Give up and see the answer?")) return;
+    void send("give-up", {}, () => "");
+  }
+
+  const ending =
+    game.stopped === "gave-up"
+      ? "You gave up"
+      : game.stopped === "closed"
+        ? "This puzzle has closed"
+        : "Out of guesses";
+
   return (
     <section className="flex flex-col gap-6 border border-muted bg-surface p-4">
       <p className="text-sm text-muted">
-        Types: ✓ exact · ~ one shared · ✗ none. Stats: ↑ the answer&apos;s is
-        higher · ↓ lower · = equal.
+        Types: ✓ in the answer · ✗ not · = exactly its types. Stats: ↑ the
+        answer&apos;s is higher · ↓ lower · = equal.
       </p>
 
       {(count > 0 || game.answer) && (
@@ -166,8 +219,7 @@ export function GuessBoard({
                     {row.name}
                   </th>
                   <td className="py-1 pr-3 whitespace-nowrap capitalize">
-                    {typesOf(row)}
-                    <Feedback mark={MATCHES[row.typeMatch]} />
+                    <TypeHits row={row} />
                   </td>
                   {STATS.map((stat) => (
                     <td key={stat} className="py-1 pr-3 whitespace-nowrap">
@@ -208,8 +260,7 @@ export function GuessBoard({
       >
         {message && `${message} `}
         {game.status === "won" && `Got it: ${game.answer?.name}.`}
-        {game.status === "lost" &&
-          `${game.remaining > 0 ? "This puzzle has closed" : "Out of guesses"}. It was ${game.answer?.name}.`}
+        {game.status === "lost" && `${ending}. It was ${game.answer?.name}.`}
         {!over && `${game.remaining} guesses left.`}
       </p>
 
@@ -240,6 +291,14 @@ export function GuessBoard({
             className="border border-foreground bg-foreground px-4 py-1 font-bold text-background focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground"
           >
             {pending ? "Checking…" : "Guess"}
+          </button>
+          <button
+            type="button"
+            onClick={giveUp}
+            aria-disabled={pending}
+            className="border border-muted px-3 py-1 text-sm text-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground"
+          >
+            Give up
           </button>
         </form>
       )}

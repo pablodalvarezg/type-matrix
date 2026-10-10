@@ -5,12 +5,15 @@ import {
   progress,
   type Entry,
   type Progress,
+  type Stop,
 } from "@modules/guess/domain/guess";
 import {
   addGuess,
   createGame,
   findDailyGames,
   findGame,
+  findLatestGame,
+  giveUp as storeGiveUp,
   type GameRow,
 } from "@modules/guess/guess.repository";
 import { gameId } from "@modules/guess/guess.schema";
@@ -20,6 +23,7 @@ type GameView = Progress & { id: string };
 
 export type GuessError =
   "not-found" | "over" | "unknown" | "repeated" | "conflict";
+export type GiveUpError = "not-found" | "over" | "conflict";
 
 /** The guess space for autocomplete. Every name, so it says nothing. */
 export const speciesNames = snapshot.species.map((species) => species.name);
@@ -33,25 +37,46 @@ function entryOf(slug: string): Entry {
   return { name, types, stats };
 }
 
-const view = (
-  id: string,
-  { speciesSlug, guesses, closesAt }: GameRow,
-): GameView => ({
+const stopOf = ({ givenUp, closesAt }: GameRow): Stop | undefined =>
+  givenUp
+    ? "gave-up"
+    : closesAt !== null && closesAt <= new Date()
+      ? "closed"
+      : undefined;
+
+const view = (id: string, game: GameRow): GameView => ({
   id,
   ...progress(
-    entryOf(speciesSlug),
-    guesses.map(entryOf),
-    closesAt !== null && closesAt <= new Date(),
+    entryOf(game.speciesSlug),
+    game.guesses.map(entryOf),
+    stopOf(game),
   ),
 });
 
 const load = async (id: string, playerId: string) =>
   gameId.safeParse(id).success ? findGame(id, playerId) : undefined;
 
+/** The player's free-play game still being played, if there is one. */
+export async function getOpenGame(
+  playerId: string,
+): Promise<GameView | undefined> {
+  const latest = await findLatestGame(playerId);
+  const game = latest && view(latest.id, latest);
+  return game?.status === "playing" ? game : undefined;
+}
+
+/** The open game, or a new one: one free-play game at a time. */
 export async function startGame(playerId: string): Promise<GameView> {
+  const open = await getOpenGame(playerId);
+  if (open) return open;
   const species = snapshot.species[randomInt(snapshot.species.length)]!;
   const id = await createGame(playerId, species.slug);
-  return view(id, { speciesSlug: species.slug, guesses: [], closesAt: null });
+  return view(id, {
+    speciesSlug: species.slug,
+    guesses: [],
+    closesAt: null,
+    givenUp: false,
+  });
 }
 
 /** The player's own game, or undefined for any other id. */
@@ -91,4 +116,18 @@ export async function guess(
     return "conflict";
   }
   return view(id, { ...game, guesses: [...game.guesses, species.slug] });
+}
+
+/** Ends the game as lost; the response is the first to carry the answer. */
+export async function giveUp(
+  id: string,
+  playerId: string,
+): Promise<GameView | GiveUpError> {
+  const game = await load(id, playerId);
+  if (!game) return "not-found";
+  if (view(id, game).status !== "playing") return "over";
+  if (!(await storeGiveUp(id, playerId, game.guesses.length))) {
+    return "conflict";
+  }
+  return view(id, { ...game, givenUp: true });
 }

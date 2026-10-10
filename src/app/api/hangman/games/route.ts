@@ -6,7 +6,7 @@ import { rejectUnlessJson } from "@shared/http/require-json";
 import { throttle } from "@shared/http/throttle";
 
 /**
- * Starts a game for the caller; their first one also makes them a player.
+ * The caller's open game, or a new one; their first also makes them a player.
  * Throttled per IP: a script that drops its cookie adds two rows per call.
  */
 export async function POST(request: Request) {

@@ -1,16 +1,19 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { POST as dailyStartRoute } from "@app/api/daily/games/route";
+import { POST as statsGiveUpRoute } from "@app/api/guess/games/[id]/give-up/route";
 import { POST as statsGuessRoute } from "@app/api/guess/games/[id]/guesses/route";
 import { POST as statsStartRoute } from "@app/api/guess/games/route";
+import { POST as giveUpRoute } from "@app/api/hangman/games/[id]/give-up/route";
 import { POST as guessRoute } from "@app/api/hangman/games/[id]/guesses/route";
 import { POST as startRoute } from "@app/api/hangman/games/route";
 import { getDaily } from "@modules/daily";
-import { shuffle } from "@modules/daily/domain/daily";
+import { dailyAnswer, shuffle } from "@modules/daily/domain/daily";
 import { POOL_V1 } from "@modules/daily/domain/pool";
 import { findSpecies, snapshot, type Species } from "@modules/dex";
 import { getGame as getStatsGame } from "@modules/guess";
 import { getGame } from "@modules/hangman";
+import { MAX_WRONG } from "@modules/hangman/domain/hangman";
 
 /*
  * The project's thesis as a test: play whole games through the route
@@ -24,7 +27,14 @@ const games = vi.hoisted(
   () =>
     new Map<
       string,
-      { playerId: string; speciesSlug: string; letters: string }
+      {
+        playerId: string;
+        speciesSlug: string;
+        letters: string;
+        puzzle?: number;
+        closesAt: Date | null;
+        givenUp: boolean;
+      }
     >(),
 );
 const statsGames = vi.hoisted(
@@ -37,6 +47,7 @@ const statsGames = vi.hoisted(
         guesses: string[];
         puzzle?: number;
         closesAt: Date | null;
+        givenUp: boolean;
       }
     >(),
 );
@@ -69,16 +80,38 @@ vi.mock("node:crypto", async (original) => ({
   ...(await original<typeof import("node:crypto")>()),
   randomInt: () => pick.index,
 }));
+// Free play is the latest game without a puzzle, as the table orders them.
+const latest = vi.hoisted(
+  () =>
+    <G extends { playerId: string; puzzle?: number }>(
+      map: Map<string, G>,
+      playerId: string,
+    ) => {
+      const found = [...map].filter(
+        ([, game]) => game.playerId === playerId && !game.puzzle,
+      );
+      const last = found.at(-1);
+      return last && { id: last[0], ...last[1] };
+    },
+);
+
 vi.mock("@modules/hangman/hangman.repository", () => ({
   createGame: async (playerId: string, speciesSlug: string) => {
     const id = crypto.randomUUID();
-    games.set(id, { playerId, speciesSlug, letters: "" });
+    games.set(id, {
+      playerId,
+      speciesSlug,
+      letters: "",
+      closesAt: null,
+      givenUp: false,
+    });
     return id;
   },
   findGame: async (id: string, playerId: string) => {
     const game = games.get(id);
     return game?.playerId === playerId ? { ...game } : undefined;
   },
+  findLatestGame: async (playerId: string) => latest(games, playerId),
   addLetter: async (
     id: string,
     playerId: string,
@@ -86,16 +119,81 @@ vi.mock("@modules/hangman/hangman.repository", () => ({
     letter: string,
   ) => {
     const game = games.get(id);
-    if (game?.playerId !== playerId || game.letters !== letters) return false;
+    if (
+      game?.playerId !== playerId ||
+      game.letters !== letters ||
+      game.givenUp
+    ) {
+      return false;
+    }
     game.letters += letter;
     return true;
   },
+  giveUp: async (id: string, playerId: string, letters: string) => {
+    const game = games.get(id);
+    if (
+      game?.playerId !== playerId ||
+      game.letters !== letters ||
+      game.givenUp
+    ) {
+      return false;
+    }
+    game.givenUp = true;
+    return true;
+  },
+  createDailyGame: async (
+    playerId: string,
+    speciesSlug: string,
+    puzzle: number,
+    closesAt: Date,
+  ) => {
+    const taken = [...games.values()].some(
+      (game) => game.playerId === playerId && game.puzzle === puzzle,
+    );
+    if (!taken) {
+      games.set(crypto.randomUUID(), {
+        playerId,
+        speciesSlug,
+        letters: "",
+        puzzle,
+        closesAt,
+        givenUp: false,
+      });
+    }
+  },
+  findDailyGames: async (playerId: string) =>
+    [...games]
+      .filter(([, game]) => game.playerId === playerId && game.puzzle)
+      .map(([id, game]) => ({ id, ...game })),
+  findWinners: async () => [],
 }));
 vi.mock("@modules/guess/guess.repository", () => ({
   createGame: async (playerId: string, speciesSlug: string) => {
     const id = crypto.randomUUID();
-    statsGames.set(id, { playerId, speciesSlug, guesses: [], closesAt: null });
+    statsGames.set(id, {
+      playerId,
+      speciesSlug,
+      guesses: [],
+      closesAt: null,
+      givenUp: false,
+    });
     return id;
+  },
+  findLatestGame: async (playerId: string) => {
+    const game = latest(statsGames, playerId);
+    return game && { ...game, guesses: [...game.guesses] };
+  },
+  giveUp: async (id: string, playerId: string, count: number) => {
+    const game = statsGames.get(id);
+    if (
+      game?.playerId !== playerId ||
+      game.guesses.length !== count ||
+      game.givenUp
+    ) {
+      return false;
+    }
+    game.givenUp = true;
+    return true;
   },
   findGame: async (id: string, playerId: string) => {
     const game = statsGames.get(id);
@@ -110,7 +208,11 @@ vi.mock("@modules/guess/guess.repository", () => ({
     slug: string,
   ) => {
     const game = statsGames.get(id);
-    if (game?.playerId !== playerId || game.guesses.length !== count) {
+    if (
+      game?.playerId !== playerId ||
+      game.guesses.length !== count ||
+      game.givenUp
+    ) {
       return false;
     }
     game.guesses.push(slug);
@@ -133,6 +235,7 @@ vi.mock("@modules/guess/guess.repository", () => ({
         guesses: [],
         puzzle,
         closesAt,
+        givenUp: false,
       });
     }
   },
@@ -188,10 +291,17 @@ const modes = {
     view: getStatsGame,
   },
   daily: {
-    start: () => dailyStartRoute(post({ date: TODAY })),
+    start: () => dailyStartRoute(post({ date: TODAY, mode: "guess" })),
     guess: statsGuessRoute,
     // All the daily page gets: the game, and nothing else until it is over.
-    view: async (_id: string, playerId: string) => getDaily(playerId, 1),
+    view: async (_id: string, playerId: string) =>
+      getDaily("guess", playerId, 1),
+  },
+  dailyHangman: {
+    start: () => dailyStartRoute(post({ date: TODAY, mode: "hangman" })),
+    guess: guessRoute,
+    view: async (_id: string, playerId: string) =>
+      getDaily("hangman", playerId, 1),
   },
 };
 
@@ -361,7 +471,7 @@ describe("Daily puzzle: no answer before the game is over", () => {
       params: Promise.resolve({ id: game.id }),
     });
     expect(response.status).toBe(409);
-    expect(await getDaily(playerOf(), 1)).toMatchObject({
+    expect(await getDaily("guess", playerOf(), 1)).toMatchObject({
       game: { status: "lost", rows: [] },
       streak: { current: 0 },
     });
@@ -369,14 +479,119 @@ describe("Daily puzzle: no answer before the game is over", () => {
 
   it("gives the same game to a second start", async () => {
     const { game } = await play("daily", DAILY, () => []);
-    const again = await dailyStartRoute(post({ date: TODAY }));
+    const again = await dailyStartRoute(post({ date: TODAY, mode: "guess" }));
     expect(await again.json()).toMatchObject({ id: game.id });
   });
 
   it("refuses a date that is today nowhere", async () => {
     jar.clear();
-    const response = await dailyStartRoute(post({ date: "2000-01-01" }));
+    const response = await dailyStartRoute(
+      post({ date: "2000-01-01", mode: "guess" }),
+    );
     expect(response.status).toBe(400);
     expect(jar.size).toBe(0);
   });
+});
+
+// Puzzle #1's Hangman round under the test secret, never the Stats & types one.
+const DAILY_HANGMAN = dailyAnswer(
+  shuffle(POOL_V1, "d".repeat(32), "hangman-v1"),
+  1,
+  DAILY,
+);
+
+describe("Daily Hangman: no answer before the game is over", () => {
+  it.each(["won", "lost"] as const)("%s", async (outcome) => {
+    const { species, responses } = await play(
+      "dailyHangman",
+      DAILY_HANGMAN,
+      letters(outcome),
+    );
+    // The views carry small numbers (misses left, the puzzle): not a dex id.
+    expect(species.id).toBeGreaterThan(MAX_WRONG);
+    expect(DAILY_HANGMAN).not.toBe(DAILY);
+
+    expect(responses.at(-1)).toMatchObject({
+      status: outcome,
+      answer: species.name,
+    });
+    expectNoAnswer(responses.slice(0, -1), species);
+  });
+});
+
+const giveUps = {
+  hangman: { route: giveUpRoute, guess: guessRoute, body: { letter: "z" } },
+  stats: {
+    route: statsGiveUpRoute,
+    guess: statsGuessRoute,
+    body: { species: "Bulbasaur" },
+  },
+  daily: {
+    route: statsGiveUpRoute,
+    guess: statsGuessRoute,
+    body: { species: "Bulbasaur" },
+  },
+  dailyHangman: {
+    route: giveUpRoute,
+    guess: guessRoute,
+    body: { letter: "z" },
+  },
+};
+
+describe("Giving up: the answer only once the player does", () => {
+  it.each([
+    ["hangman", "mr-mime", letters("lost")],
+    ["stats", "mr-mime", guesses("lost")],
+    ["daily", DAILY, guesses("lost")],
+    ["dailyHangman", DAILY_HANGMAN, letters("lost")],
+  ] as const)("%s", async (mode, slug, bodies) => {
+    // Two misses, then give up.
+    const { species, game, responses } = await play(mode, slug, (answer) =>
+      bodies(answer).slice(0, 2),
+    );
+    const params = { params: Promise.resolve({ id: game.id }) };
+    const given = await giveUps[mode].route(post(), params);
+    expect(given.status).toBe(200);
+    expect(await given.json()).toMatchObject({
+      status: "lost",
+      stopped: "gave-up",
+      answer: expect.anything(),
+    });
+    expectNoAnswer(responses, species);
+
+    // Over for good: no more guesses, and no second give-up.
+    const late = await giveUps[mode].guess(post(giveUps[mode].body), params);
+    expect(late.status).toBe(409);
+    expect((await giveUps[mode].route(post(), params)).status).toBe(409);
+  });
+
+  it("counts as a loss in the daily streak", async () => {
+    const { game } = await play("daily", DAILY, () => []);
+    await statsGiveUpRoute(post(), {
+      params: Promise.resolve({ id: game.id }),
+    });
+    expect(await getDaily("guess", playerOf(), 1)).toMatchObject({
+      game: { status: "lost", stopped: "gave-up" },
+      streak: { current: 0 },
+    });
+  });
+});
+
+describe("One free-play game at a time", () => {
+  it.each([
+    ["hangman", startRoute, giveUpRoute],
+    ["stats", statsStartRoute, statsGiveUpRoute],
+  ] as const)(
+    "%s: start hands back the open game",
+    async (_, start, giveUp) => {
+      jar.clear();
+      const first = (await (await start(post())).json()) as { id: string };
+      const again = (await (await start(post())).json()) as { id: string };
+      expect(again.id).toBe(first.id);
+
+      await giveUp(post(), { params: Promise.resolve({ id: first.id }) });
+      const next = (await (await start(post())).json()) as { id: string };
+      expect(next.id).not.toBe(first.id);
+    },
+  );
 });

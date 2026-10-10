@@ -43,6 +43,8 @@
   --animate-pop: pop 180ms ease-out backwards;
   /* Rows of a scrolling table only fade: a slide overflows it for a moment. */
   --animate-fade: fade 180ms ease-out backwards;
+  /* A stroke drawn from end to end; the shape needs pathLength="1". */
+  --animate-draw: draw 300ms ease-out backwards;
 
   @keyframes pop {
     from {
@@ -54,6 +56,12 @@
   @keyframes fade {
     from {
       opacity: 0;
+    }
+  }
+
+  @keyframes draw {
+    from {
+      stroke-dashoffset: 1;
     }
   }
 }

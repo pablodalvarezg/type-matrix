@@ -1,6 +1,10 @@
 import type { Metadata } from "next";
+import { cookies } from "next/headers";
 import Link from "next/link";
 
+import { getOpenGame } from "@modules/hangman";
+import { identify, PLAYER_COOKIE } from "@modules/players";
+import { ContinueLink } from "@shared/ui/ContinueLink";
 import { NewGameButton } from "@shared/ui/NewGameButton";
 
 export const metadata: Metadata = {
@@ -8,7 +12,11 @@ export const metadata: Metadata = {
   description: "Guess a species name, letter by letter.",
 };
 
-export default function HangmanPage() {
+// A player with a game open gets back to it: one game at a time.
+export default async function HangmanPage() {
+  const cookie = (await cookies()).get(PLAYER_COOKIE)?.value;
+  const open = cookie && (await getOpenGame(identify(cookie).id));
+
   return (
     <main className="mx-auto flex max-w-2xl flex-col gap-6 px-4 py-8">
       <header className="flex flex-col gap-2">
@@ -21,7 +29,11 @@ export default function HangmanPage() {
           anything that isn&apos;t a letter is shown from the start.
         </p>
       </header>
-      <NewGameButton mode="hangman" label="New game" />
+      {open ? (
+        <ContinueLink href={`/hangman/${open.id}`} />
+      ) : (
+        <NewGameButton mode="hangman" label="New game" />
+      )}
     </main>
   );
 }

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   closesAt,
+  dailyAnswer,
   duration,
   isToday,
   puzzleNumber,
@@ -120,5 +121,28 @@ describe("duration", () => {
   it("adds hours from an hour on", () => {
     expect(duration(3_600_000)).toBe("1:00:00");
     expect(duration(30 * 3_600_000 + 61_000)).toBe("30:01:01");
+  });
+});
+
+describe("dailyAnswer", () => {
+  const order = ["a", "b", "c", "d"];
+
+  it("indexes the order by puzzle number, wrapping around", () => {
+    expect(dailyAnswer(order, 1)).toBe("b");
+    expect(dailyAnswer(order, 5)).toBe("b");
+  });
+
+  it("steps half the order away from a clash with the other round", () => {
+    expect(dailyAnswer(order, 1, "b")).toBe("d");
+    expect(dailyAnswer(order, 1, "c")).toBe("b");
+  });
+
+  it("never gives the two rounds the same species", () => {
+    const guess = shuffle(POOL_V1, "s".repeat(32), "v1");
+    const hangman = shuffle(POOL_V1, "s".repeat(32), "hangman-v1");
+    for (let n = 1; n <= POOL_V1.length * 2; n++) {
+      const avoid = dailyAnswer(guess, n);
+      expect(dailyAnswer(hangman, n, avoid)).not.toBe(avoid);
+    }
   });
 });

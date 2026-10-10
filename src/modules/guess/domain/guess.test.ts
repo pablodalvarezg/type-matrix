@@ -42,6 +42,24 @@ describe("compare", () => {
     expect(compare(entry("Guess", types), answer).typeMatch).toBe(match);
   });
 
+  it.each([
+    [
+      ["fire", "flying"],
+      [true, true],
+    ],
+    [
+      ["flying", "water"],
+      [true, false],
+    ],
+    [
+      ["water", "fire"],
+      [false, true],
+    ],
+    [["grass"], [false]],
+  ])("marks each of %j against fire/flying: %j", (types, hits) => {
+    expect(compare(entry("Guess", types), answer).typeHits).toEqual(hits);
+  });
+
   it("is partial for a dual-typed guess against one of its types alone", () => {
     const mono = entry("Mono", ["fire"]);
     expect(compare(answer, mono).typeMatch).toBe("partial");
@@ -101,15 +119,21 @@ describe("progress", () => {
     expect(game).not.toHaveProperty("answer");
   });
 
-  it("is lost once closed, guesses left or not, and gives the answer", () => {
-    expect(progress(answer, misses(2), true)).toMatchObject({
-      status: "lost",
-      remaining: MAX_GUESSES - 2,
-      answer,
-    });
-  });
+  it.each(["closed", "gave-up"] as const)(
+    "is lost when %s, guesses left or not, and gives the answer",
+    (stop) => {
+      expect(progress(answer, misses(2), stop)).toMatchObject({
+        status: "lost",
+        remaining: MAX_GUESSES - 2,
+        stopped: stop,
+        answer,
+      });
+    },
+  );
 
   it("stays won once closed", () => {
-    expect(progress(answer, [answer], true).status).toBe("won");
+    const game = progress(answer, [answer], "closed");
+    expect(game.status).toBe("won");
+    expect(game).not.toHaveProperty("stopped");
   });
 });

@@ -41,6 +41,21 @@ export function shuffle(
   return [...pool].sort((a, b) => (keys.get(a)! < keys.get(b)! ? -1 : 1));
 }
 
+/**
+ * Puzzle `n`'s species in a shuffled `order`. With `avoid` (another round's
+ * species that day) a clash takes the species half the order away instead:
+ * order[n] is the clash, so that one cannot be it too.
+ */
+export function dailyAnswer(
+  order: readonly string[],
+  n: number,
+  avoid?: string,
+): string {
+  const pick = order[n % order.length]!;
+  if (pick !== avoid) return pick;
+  return order[(n + Math.floor(order.length / 2)) % order.length]!;
+}
+
 /** One finished daily game. */
 export interface Result {
   puzzle: number;

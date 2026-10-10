@@ -61,4 +61,22 @@ describe("progress", () => {
   it("keeps the answer back one wrong letter short of the cap", () => {
     expect(progress("Mew", "abcdf")).not.toHaveProperty("answer");
   });
+
+  it.each(["closed", "gave-up"] as const)(
+    "is lost when %s, misses left or not, and gives the answer",
+    (stop) => {
+      expect(progress("Mew", "a", stop)).toMatchObject({
+        status: "lost",
+        remaining: MAX_WRONG - 1,
+        stopped: stop,
+        answer: "Mew",
+      });
+    },
+  );
+
+  it("stays won once closed", () => {
+    const game = progress("Mew", "mew", "closed");
+    expect(game.status).toBe("won");
+    expect(game).not.toHaveProperty("stopped");
+  });
 });

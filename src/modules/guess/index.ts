@@ -7,9 +7,12 @@ export { guessBody } from "@modules/guess/guess.schema";
 export {
   getDailyGames,
   getGame,
+  getOpenGame,
+  giveUp,
   guess,
   speciesNames,
   startGame,
+  type GiveUpError,
   type GuessError,
 } from "@modules/guess/guess.service";
 export { GuessBoard } from "@modules/guess/ui/GuessBoard";
