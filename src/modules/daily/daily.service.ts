@@ -1,5 +1,6 @@
 import { puzzleParam } from "@modules/daily/daily.schema";
 import {
+  apart,
   closesAt,
   dailyAnswer,
   isToday,
@@ -52,9 +53,13 @@ export interface Daily<G> {
 
 // answer(n) = order[n mod length], one order per mode. A new pool version
 // would take over from a given puzzle number, and older numbers would keep
-// resolving here. Hangman avoids the Stats & types species of the same day.
+// resolving here. Hangman's order is kept apart from Stats & types', so the
+// two rounds never share a day's species.
 const guessOrder = shuffle(POOL_V1, env.DAILY_SECRET, "v1");
-const hangmanOrder = shuffle(POOL_V1, env.DAILY_SECRET, "hangman-v1");
+const hangmanOrder = apart(
+  shuffle(POOL_V1, env.DAILY_SECRET, "hangman-v1"),
+  guessOrder,
+);
 
 const GUESS: Round<Awaited<ReturnType<typeof guess.getDailyGames>>[number]> = {
   answer: (n) => dailyAnswer(guessOrder, n),
@@ -70,7 +75,7 @@ const GUESS: Round<Awaited<ReturnType<typeof guess.getDailyGames>>[number]> = {
 const HANGMAN: Round<
   Awaited<ReturnType<typeof hangman.getDailyGames>>[number]
 > = {
-  answer: (n) => dailyAnswer(hangmanOrder, n, dailyAnswer(guessOrder, n)),
+  answer: (n) => dailyAnswer(hangmanOrder, n),
   create: hangman.createDailyGame,
   games: hangman.getDailyGames,
   leaderboard: async (n, playerId) =>

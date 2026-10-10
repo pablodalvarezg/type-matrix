@@ -72,9 +72,10 @@ export function progress(
   stop?: Stop,
 ): Progress {
   const won = guesses.some((guess) => guess.name === answer.name);
+  const outOfGuesses = guesses.length >= MAX_GUESSES;
   const status: Status = won
     ? "won"
-    : stop || guesses.length >= MAX_GUESSES
+    : stop || outOfGuesses
       ? "lost"
       : "playing";
 
@@ -82,7 +83,9 @@ export function progress(
     rows: guesses.map((guess) => compare(guess, answer)),
     remaining: MAX_GUESSES - guesses.length,
     status,
-    ...(!won && stop && { stopped: stop }),
+    // Only if the stop is what ended it: a game already out of guesses was
+    // lost before its puzzle closed.
+    ...(!won && !outOfGuesses && stop && { stopped: stop }),
     ...(status !== "playing" && {
       answer: { name: answer.name, types: answer.types, stats: answer.stats },
     }),

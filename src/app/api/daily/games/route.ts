@@ -11,7 +11,8 @@ import { throttle } from "@shared/http/throttle";
  * one they have. Guesses go to that mode's endpoint, like any other game of
  * theirs.
  * Only a new player is throttled: a known one has at most one game per
- * puzzle, so returning to it, the button's usual job, adds no rows.
+ * puzzle and mode (two or three puzzles are open at once), so returning to
+ * one, the button's usual job, adds no rows.
  */
 export async function POST(request: Request) {
   const notJson = rejectUnlessJson(request);

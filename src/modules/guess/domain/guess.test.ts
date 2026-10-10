@@ -131,6 +131,12 @@ describe("progress", () => {
     },
   );
 
+  it("stays out of guesses, not closed, when it closes after", () => {
+    const game = progress(answer, misses(MAX_GUESSES), "closed");
+    expect(game).toMatchObject({ status: "lost", remaining: 0 });
+    expect(game).not.toHaveProperty("stopped");
+  });
+
   it("stays won once closed", () => {
     const game = progress(answer, [answer], "closed");
     expect(game.status).toBe("won");

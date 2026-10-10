@@ -8,7 +8,7 @@ import { POST as giveUpRoute } from "@app/api/hangman/games/[id]/give-up/route";
 import { POST as guessRoute } from "@app/api/hangman/games/[id]/guesses/route";
 import { POST as startRoute } from "@app/api/hangman/games/route";
 import { getDaily } from "@modules/daily";
-import { dailyAnswer, shuffle } from "@modules/daily/domain/daily";
+import { apart, shuffle } from "@modules/daily/domain/daily";
 import { POOL_V1 } from "@modules/daily/domain/pool";
 import { findSpecies, snapshot, type Species } from "@modules/dex";
 import { getGame as getStatsGame } from "@modules/guess";
@@ -494,11 +494,10 @@ describe("Daily puzzle: no answer before the game is over", () => {
 });
 
 // Puzzle #1's Hangman round under the test secret, never the Stats & types one.
-const DAILY_HANGMAN = dailyAnswer(
+const DAILY_HANGMAN = apart(
   shuffle(POOL_V1, "d".repeat(32), "hangman-v1"),
-  1,
-  DAILY,
-);
+  shuffle(POOL_V1, "d".repeat(32), "v1"),
+)[1]!;
 
 describe("Daily Hangman: no answer before the game is over", () => {
   it.each(["won", "lost"] as const)("%s", async (outcome) => {

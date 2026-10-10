@@ -99,16 +99,16 @@ Lo que hay hoy, no solo adónde van las cosas:
 src/
 ├─ app/                        # SOLO routing y composición
 │  ├─ layout.tsx               # html, body, tokens globales
-│  ├─ page.tsx                 # home: los cinco modos, cada tarjeta entera es el link
+│  ├─ page.tsx                 # home: los cinco modos, cada tarjeta entera es el link; la del diario, con rachas y cuenta regresiva
 │  ├─ (modes)/calculator/      # page.tsx: lee searchParams, llama al service
 │  ├─ (modes)/team/            # page.tsx: la misma forma
-│  ├─ (modes)/hangman/         # page.tsx: botón de partida nueva · [id]/page.tsx: el tablero
+│  ├─ (modes)/hangman/         # page.tsx: "Continue" si hay una abierta, si no partida nueva · [id]/page.tsx: el tablero
 │  ├─ (modes)/guess/           # Stats & types, la misma forma que hangman
-│  ├─ (modes)/daily/           # page.tsx: botón con la fecha local · [n]/page.tsx: el tablero de guess y la racha
+│  ├─ (modes)/daily/           # page.tsx: las dos rondas, cada una con su botón · guess/[n] y hangman/[n]: el tablero, la racha y el leaderboard
 │  ├─ api/players/nickname/    # route.ts: POST, emite la cookie y guarda el nickname
-│  ├─ api/hangman/games/       # route.ts: POST crea la partida · [id]/guesses/route.ts: POST una letra
+│  ├─ api/hangman/games/       # route.ts: POST crea la partida o devuelve la abierta · [id]/guesses: POST una letra · [id]/give-up: POST
 │  ├─ api/guess/games/         # la misma forma; el intento es `{ species }`, nombre o slug
-│  ├─ api/daily/games/         # route.ts: POST `{ date }`, crea o devuelve la del día; los intentos van a api/guess
+│  ├─ api/daily/games/         # route.ts: POST `{ date, mode }`, crea o devuelve la del día; intentos y give-up van a la API del modo
 │  └─ globals.css              # los tokens del tema, claro y oscuro
 ├─ modules/
 │  ├─ battle/                  # stats y daño
@@ -117,11 +117,11 @@ src/
 │  │  ├─ battle.schema.ts      # Zod de los search params del formulario
 │  │  ├─ battle.service.ts     # busca en dex, STAB, efectividad, llama al domain
 │  │  └─ index.ts
-│  ├─ daily/                   # puzzle diario, sin repositorio: sus partidas son de guess
-│  │  ├─ domain/               # daily.ts: número, ventana UTC−12…+14, mezcla con HMAC, rachas, formato del tiempo · pool.ts: POOL_V1
-│  │  ├─ ui/                   # Leaderboard (server): top 10 y la fila propia
-│  │  ├─ daily.schema.ts       # `{ date }` · el número de la URL
-│  │  ├─ daily.service.ts      # elige la especie, valida la fecha, calcula la racha, trae el leaderboard al terminar
+│  ├─ daily/                   # puzzle diario, sin repositorio: sus partidas son de guess y de hangman
+│  │  ├─ domain/               # daily.ts: número, ventana UTC−12…+14, mezcla con HMAC, apart (dos órdenes sin la misma especie en una posición), rachas · time.ts: hasta la medianoche local y formato del tiempo (sin node:crypto, corre en el navegador) · pool.ts: POOL_V1
+│  │  ├─ ui/                   # Leaderboard (server): top 10 y la fila propia, por intentos o fallos · Countdown (cliente)
+│  │  ├─ daily.schema.ts       # `{ date, mode }` · el número de la URL
+│  │  ├─ daily.service.ts      # un "round" por modo: elige la especie (hangman evita la de guess del día), valida la fecha, rachas, leaderboard, getStreaks para la home
 │  │  └─ index.ts
 │  ├─ dex/                     # especies, movimientos, tabla de tipos
 │  │  ├─ domain/               # dex.ts (tipos) · effectiveness.ts
@@ -129,18 +129,18 @@ src/
 │  │  ├─ dex.schema.ts         # Zod del snapshot, se parsea al cargar
 │  │  └─ index.ts
 │  ├─ guess/                   # Stats & types, free play y las partidas del diario
-│  │  ├─ domain/               # guess.ts: veredicto de tipos, flechas por stat, estado, respuesta al terminar
+│  │  ├─ domain/               # guess.ts: ✓/✗ por tipo y veredicto exacto, flechas por stat, estado, `stopped` (cerrado o rendido), respuesta al terminar
 │  │  ├─ ui/                   # GuessBoard (cliente); lo que va al terminar llega por `children`
 │  │  ├─ guess.schema.ts       # `{ species }` · el id de partida
-│  │  ├─ guess.repository.ts   # como el de hangman: `guesses text[]`, concurrencia por cantidad; `puzzle` y `closes_at` en las diarias; `won_at` por el reloj de la base; el leaderboard de un puzzle
-│  │  ├─ guess.service.ts      # elige la especie, resuelve el nombre, devuelve la vista pública
+│  │  ├─ guess.repository.ts   # como el de hangman: `guesses text[]`, concurrencia por cantidad; `puzzle` y `closes_at` en las diarias; `won_at` por el reloj de la base; `given_up_at`; la última de free play; el leaderboard de un puzzle
+│  │  ├─ guess.service.ts      # una partida abierta a la vez, resuelve el nombre, rendirse, devuelve la vista pública
 │  │  └─ index.ts
-│  ├─ hangman/                 # ahorcado free play
-│  │  ├─ domain/               # hangman.ts: máscara con acentos plegados, fallos, estado, respuesta al terminar
-│  │  ├─ ui/                   # HangmanBoard (cliente)
+│  ├─ hangman/                 # ahorcado, free play y las partidas del diario
+│  │  ├─ domain/               # hangman.ts: máscara con acentos plegados, fallos, estado, `stopped`, respuesta al terminar
+│  │  ├─ ui/                   # HangmanBoard (cliente); lo que va al terminar llega por `children` · Gallows: una parte por fallo
 │  │  ├─ hangman.schema.ts     # una letra a–z · el id de partida
-│  │  ├─ hangman.repository.ts # crear (y el jugador), buscar, agregar letra con concurrencia optimista
-│  │  ├─ hangman.service.ts    # elige la especie, aplica reglas, devuelve la vista pública
+│  │  ├─ hangman.repository.ts # crear (y el jugador), buscar, la última de free play, letra y give-up con concurrencia optimista, diarias, ganadores
+│  │  ├─ hangman.service.ts    # una partida abierta a la vez, reglas, rendirse, fallos del leaderboard, vista pública
 │  │  └─ index.ts
 │  ├─ players/                 # identidad por cookie firmada, nickname
 │  │  ├─ domain/               # player-cookie.ts: firma y verifica `<id>.<hmac>`
@@ -159,14 +159,15 @@ src/
    ├─ config/                  # env.ts (Zod, server-only) · env-schema.ts (puro)
    ├─ db/                      # client.ts: neon() sobre HTTP (server-only) · rate-limit.ts: hit() por clave y hora
    ├─ http/                    # require-json.ts: el 415 de toda ruta que emite la cookie · throttle.ts: el 429 por IP
-   ├─ ui/                      # Combobox · NewGameButton (cliente)
+   ├─ ui/                      # Combobox · NewGameButton (cliente) · ContinueLink (server)
+   ├─ game.ts                  # lo que comparten los modos: stopOf (cerrado o rendido) · serverAhead (cuándo un tablero toma la partida del servidor)
    └─ search-params.ts         # SearchParams · param(), de los formularios GET
 data/snapshot.json             # generado por scripts/ingest.ts, commiteado
 db/migrations/                 # NNNN_nombre.sql, se aplican en orden y una vez
 scripts/ingest.ts              # PokéAPI → snapshot. Manual, nunca en runtime
 scripts/migrate.ts             # aplica las migraciones pendientes. Manual
 tests/                         # tests que no son de un módulo: boundaries, contraste, no-filtración, throttle de las rutas
-tests/e2e/                     # smoke.e2e.ts: Playwright, un test por modo a 360 px
+tests/e2e/                     # smoke.e2e.ts: Playwright, un test por modo (y por ronda del diario) a 360 px
 docs/adr/                      # NNNN-titulo.md, una decisión de arquitectura por archivo
 ```
 
@@ -378,6 +379,7 @@ Reglas que no se negocian, porque son la tesis:
   | `src/modules/guess/ui/GuessBoard.tsx` | La misma excepción que `HangmanBoard`: cada especie es un `POST` JSON. Lleva el `Combobox` con los 1025 nombres, que son el espacio de búsqueda |
   | `src/shared/ui/NewGameButton.tsx` | `POST` que crea la partida de un modo y navega a su id. La misma excepción, compartida por los tres modos. El diario manda la fecha local del navegador, que solo el cliente conoce, y navega al número de puzzle |
   | `src/modules/players/ui/NicknameForm.tsx` | `POST` del nickname y `router.refresh()`, para que el servidor dibuje la fila nueva del leaderboard. La misma excepción que los tableros: manda un dato, no lee datos |
+| `src/modules/daily/ui/Countdown.tsx` | El tiempo hasta la medianoche local, que solo el navegador conoce, y un intervalo que lo actualiza. En el servidor no muestra nada, para no desentonar con la hidratación |
 
 - **Nada de widgets nativos donde haya que estilar.** Sin `<select>` ni
   `type="number"`. Con pocas opciones fijas, pills; para números (nivel, IVs, EVs),
@@ -421,7 +423,7 @@ Reglas que no se negocian, porque son la tesis:
   muerde). Los intentos del test no comparten esa línea con la respuesta, y
   el test lo comprueba: hay 15 grupos de especies con las mismas stats.
   El diario juega su puzzle #1 con `LAUNCH_DATE` = hoy y revisa también la
-  vista de `/daily/[n]` (verificado que muerde: con el slug de la respuesta en
+  vista de `/daily/guess/[n]` (verificado que muerde: con el slug de la respuesta en
   esa vista, sus dos casos fallan). También prueba que un puzzle cerrado no
   acepta intentos (verificado que muerde: sin el chequeo del cierre, falla).
   La vista del diario es todo lo que devuelve `getDaily`, así que racha y
@@ -429,6 +431,13 @@ Reglas que no se negocian, porque son la tesis:
   Por ese envoltorio, la clave `answer` se busca a cualquier profundidad
   (verificado que muerde: con `answer` dentro de `game`, la aserción vieja,
   solo en el primer nivel, pasaba).
+  El ahorcado diario juega su puzzle #1 igual, ganando y perdiendo; su
+  especie no es la de Stats & types ese día y su número de Pokédex supera los
+  números chicos de la vista (fallos restantes, el puzzle). Rendirse se juega
+  en los cuatro tipos de partida: ninguna respuesta anterior al give-up trae
+  la respuesta, el give-up sí, y después no se aceptan intentos ni otro
+  give-up. Verificado que muerde: con la respuesta siempre en la vista del
+  ahorcado, fallan sus ocho casos, los del diario y los de rendirse incluidos.
 - **Smoke e2e** (Playwright, `tests/e2e/smoke.e2e.ts`): uno por modo más la
   home, jugando las partidas hasta el final sin saber la respuesta. Corre a
   360 px y después de cada test comprueba que la página no tiene scroll
@@ -534,12 +543,19 @@ Trabajá solo en el paso actual. No adelantes el siguiente.
 - [x] **9. Leaderboard.** Por puzzle: menos intentos, después menos tiempo,
       de `created_at` a `won_at`, los dos por el reloj de Neon. Solo jugadores
       con nickname; un ganador sin nickname ve el form para elegirlo. Se ve al
-      terminar la partida, en `/daily/[n]`: top 10 y la fila propia si queda
+      terminar la partida, en `/daily/guess/[n]`: top 10 y la fila propia si queda
       más abajo (decidido por Pablo el 2026-10-09).
 - [ ] **10. Cierre** ← en curso.
       - [x] Throttle por IP y hora de las cuatro rutas que agregan filas
             (`rate_limits`, ADR 0006): 10 nicknames y 60 partidas.
       - [x] Smoke de Playwright por modo a 360 px, `.gitattributes`, ADRs 0001–0006.
+      - [x] Cursor, animaciones en CSS y tarjetas de la home enteras como link.
+      - [x] Mejoras de juego (decididas por Pablo el 2026-10-09, ADRs 0007 y
+            0008): ✓/✗ por tipo en Stats & types; el dibujo del ahorcado;
+            una partida abierta por modo, "Continue" y "Give up" (también en
+            el diario, donde cuenta como derrota); el ahorcado diario, con su
+            propia especie, racha y leaderboard por fallos; rachas y cuenta
+            regresiva a la medianoche local en la tarjeta del diario.
       - [ ] **Pablo:** deploy en Vercel con las cuatro variables, `LAUNCH_DATE`
             = día del deploy, `db:migrate` contra la base de producción,
             Lighthouse mobile sobre la URL y capturas.

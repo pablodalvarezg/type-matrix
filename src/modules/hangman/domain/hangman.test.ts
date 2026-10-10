@@ -74,6 +74,12 @@ describe("progress", () => {
     },
   );
 
+  it("stays out of misses, not closed, when it closes after", () => {
+    const game = progress("Mew", "abcdfg", "closed");
+    expect(game).toMatchObject({ status: "lost", remaining: 0 });
+    expect(game).not.toHaveProperty("stopped");
+  });
+
   it("stays won once closed", () => {
     const game = progress("Mew", "mew", "closed");
     expect(game.status).toBe("won");

@@ -5,7 +5,6 @@ import {
   progress,
   type Entry,
   type Progress,
-  type Stop,
 } from "@modules/guess/domain/guess";
 import {
   addGuess,
@@ -17,6 +16,7 @@ import {
   type GameRow,
 } from "@modules/guess/guess.repository";
 import { gameId } from "@modules/guess/guess.schema";
+import { stopOf } from "@shared/game";
 
 /** Everything a response or a page may carry. No answer until it is over. */
 type GameView = Progress & { id: string };
@@ -36,13 +36,6 @@ function entryOf(slug: string): Entry {
   const { name, types, stats } = findSpecies(slug)!;
   return { name, types, stats };
 }
-
-const stopOf = ({ givenUp, closesAt }: GameRow): Stop | undefined =>
-  givenUp
-    ? "gave-up"
-    : closesAt !== null && closesAt <= new Date()
-      ? "closed"
-      : undefined;
 
 const view = (id: string, game: GameRow): GameView => ({
   id,

@@ -14,9 +14,9 @@ Side project #2 of [Pablo Álvarez Graña's portfolio](https://github.com/pablod
 |---|---|---|
 | **Battle calculator** | Picks attacker, defender, move, level, IVs, EVs and nature, and gets the damage range and the percentage of the defender's HP | No answer. Pure calculation |
 | **Team builder** | Builds a team of 6 and sees shared weaknesses and offensive coverage | No answer. Pure calculation |
-| **Hangman** | Guesses a species name letter by letter | Server only |
+| **Hangman** | Guesses a species name letter by letter, while the gallows fills in | Server only |
 | **Stats & types** | Guesses a species from feedback on its types and base stats, Wordle-style | Server only |
-| **Daily puzzle** | One Stats & types round per day, the same for everyone, with streaks and a leaderboard | Server only |
+| **Daily puzzle** | A Stats & types round and a Hangman round per day, each with its own species, the same for everyone, each with its own streak and leaderboard | Server only |
 
 ### Why there is no silhouette mode
 
@@ -45,12 +45,13 @@ The proof is a test: it plays a full game through the API and checks that **no r
 The puzzle for any given day has to be rebuildable at any time, without a cron job and without storing it in advance. That makes it a function:
 
 ```
-answer(n) = shuffle(POOL, seed = HMAC(DAILY_SECRET, poolVersion))[n mod POOL.length]
+answer(n) = shuffle(POOL, seed = HMAC(DAILY_SECRET, roundVersion))[n mod POOL.length]
 ```
 
 - `n` is the puzzle number: days since launch, plus one.
 - **The repo is public**, so a seed derived from the date alone would let anyone compute tomorrow's answer from the source code. The server-side `DAILY_SECRET` is what prevents that.
 - Shuffling the pool once (instead of hashing each day) means no repeats until the pool cycles.
+- Each round has its own shuffle (`"v1"` for Stats & types, `"hangman-v1"` for Hangman). The Hangman order is then kept apart from the Stats & types one: wherever both hold the same species, it swaps with the next position. It is still a shuffle of the whole pool, so no repeats within a cycle, and the two rounds never share a day's species: solving one would give the other away.
 - **`POOL` and `DAILY_SECRET` are frozen.** Changing either one rewrites every past puzzle. If the pool ever has to change, it becomes a new pool version that takes effect from a given puzzle number, and older numbers keep resolving against the old version.
 
 No scheduler: the puzzle is computed, not published.
@@ -61,8 +62,9 @@ No scheduler: the puzzle is computed, not published.
 
 - The client sends its local date. The server turns it into a puzzle number and **accepts it only if that date is "today" somewhere on Earth** (UTC−12 to UTC+14). That window holds at most two or three puzzle numbers at any moment.
 - One game per player per puzzle, enforced with a unique constraint, not with application code.
-- **A streak counts consecutive puzzle numbers won**, not calendar days. A loss or a missed puzzle resets it. It is derived from the results table, never stored as a counter that can drift.
-- Leaderboard per puzzle: fewest guesses first, then shortest **server-measured** time (from game creation to the winning guess). The client's clock is never trusted.
+- **A streak counts consecutive puzzle numbers won**, not calendar days, one per round. A loss, a give-up or a missed puzzle resets it. It is derived from the results table, never stored as a counter that can drift.
+- Leaderboard per puzzle and round: fewest guesses (Stats & types) or fewest misses (Hangman) first, then shortest **server-measured** time (from game creation to the winning guess). The client's clock is never trusted. Every winner of a Hangman puzzle found the same letters, so fewest letters tried is fewest misses: no extra column.
+- The home page shows the player's current streaks and, like the daily page, the time left until their local midnight, when the next puzzle opens. Only the browser knows that midnight, so the countdown is rendered there.
 - Only players with a nickname are listed; a winner without one is offered the form. The board shows once your game is over: the top 10, and your own row if it falls lower.
 
 ### 4. The damage formula has more modifiers than it looks like
@@ -189,28 +191,29 @@ This tree is **where things go, not what has to exist on day one**. A module is 
 
 Names like `Mr. Mime`, `Farfetch'd`, `Type: Null`, `Nidoran♀` and `Flabébé`. Letters are compared with accents folded (`é` → `e`), and anything that is not a letter (spaces, dots, apostrophes, symbols) is revealed from the start. The word's length and shape are public; its letters are not.
 
-- The answer is any of the 1025 species in the snapshot. Six misses end the game.
+- The answer is any of the 1025 species in the snapshot. Six misses end the game, and each one adds a part to the gallows drawing (decoration: the misses are also said in words).
 - A game belongs to the player who started it: starting one issues the player cookie, and with any other cookie the game is a 404.
-- A repeated letter is refused and costs nothing. Two guesses sent at once cannot both count: the second is refused, so the miss cap holds.
-- The API is `POST /api/hangman/games` and `POST /api/hangman/games/{id}/guesses` with `{ "letter": "a" }`. Each response is the public view of the game: the mask, the letters tried, the misses left and the status, plus the answer once it is over.
+- **One free-play game at a time.** Starting a game hands back the one already open, and `/hangman` offers "Continue" instead of "New game", so leaving the board never loses it. **Give up** ends it as lost and shows the answer; then a new game can start.
+- A repeated letter is refused and costs nothing. Two guesses sent at once cannot both count: the second is refused, so the miss cap holds. A give-up and a guess cannot both land either: each checks that nothing changed since it read the game.
+- The API is `POST /api/hangman/games`, `POST /api/hangman/games/{id}/guesses` with `{ "letter": "a" }`, and `POST /api/hangman/games/{id}/give-up`. Each response is the public view of the game: the mask, the letters tried, the misses left and the status, plus the answer once it is over.
 
 ### Stats & types, feedback per guess
 
 For each guessed species the server returns: types (exact match, partial match, none), and each base stat (higher, lower, equal). Guesses are capped per game. The list of species names for autocomplete can travel to the client: it is the guess space, not the answer.
 
 - The answer is any of the 1025 species in the snapshot. Eight guesses per game.
-- Types get one verdict per guess: **exact** (the same types, in any order), **partial** (at least one shared) or **none**. Each of the six base stats gets an arrow: the answer's is higher, lower or equal.
-- A species already guessed, or a name that is not a species, is refused and costs nothing. Ownership and concurrent guesses work as in Hangman.
+- Each type of a guess gets its own mark: ✓ if the answer has it, ✗ if not, plus **=** when the guess's types are exactly the answer's (any order). A mono-type ✓ without = means the answer has a second type. Each of the six base stats gets an arrow: the answer's is higher, lower or equal.
+- A species already guessed, or a name that is not a species, is refused and costs nothing. Ownership, concurrent guesses, one open game at a time and giving up work as in Hangman.
 - Once the game is over, the answer comes back in full: name, types and base stats.
-- The API is `POST /api/guess/games` and `POST /api/guess/games/{id}/guesses` with `{ "species": "Mr. Mime" }` (a name or slug). Each response is the public view of the game: one row per guess with its feedback, the guesses left and the status, plus the answer once it is over.
+- The API is `POST /api/guess/games`, `POST /api/guess/games/{id}/guesses` with `{ "species": "Mr. Mime" }` (a name or slug), and `POST /api/guess/games/{id}/give-up`. Each response is the public view of the game: one row per guess with its feedback, the guesses left and the status, plus the answer once it is over.
 
 ### Daily puzzle, details that are easy to miss
 
-A daily game is a Stats & types game with a puzzle number: same rules, same board, same guesses endpoint.
+The daily puzzle has two rounds. Each daily game is a game of its mode with a puzzle number: same rules, same board, same guesses and give-up endpoints as free play.
 
 - `POOL_V1` is the 1025 snapshot slugs, committed as a list so a re-ingest cannot change it. The shuffle sorts it by `HMAC(HMAC(DAILY_SECRET, "v1"), slug)`.
-- `POST /api/daily/games` with `{ "date": "YYYY-MM-DD" }`, the browser's local date. A date that is not today anywhere, or before launch, is a 400. Starting again returns the same game: the table has a unique key on player and puzzle. The page is `/daily/{n}`, and only the player's own game is found there.
-- **Streaks** (current and best) appear once the game is over. The current one stays alive while today's puzzle is unplayed, and ends with a loss or a puzzle skipped.
+- `POST /api/daily/games` with `{ "date": "YYYY-MM-DD", "mode": "guess" | "hangman" }`, the browser's local date. A date that is not today anywhere, or before launch, is a 400. Starting again returns the same game: each table has a unique key on player and puzzle. The pages are `/daily/guess/{n}` and `/daily/hangman/{n}`, and only the player's own game is found there.
+- **Streaks** (current and best) appear once the game is over, one per round. The current one stays alive while today's puzzle is unplayed, and ends with a loss, a give-up or a puzzle skipped.
 - **A puzzle closes when its date is no longer today anywhere**: 12:00 UTC the next day. An unfinished game is lost from then on and takes no more guesses, so an answer seen elsewhere cannot win it late and mend a streak.
 - The server never sees the player's date on that page, so it takes today to be the earliest puzzle still open somewhere, or the latest one the player has played if that is later. A puzzle skipped can show as a break up to a day late.
 

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { getDaily, getStreaks, startDaily } from "@modules/daily/daily.service";
-import { dailyAnswer, shuffle } from "@modules/daily/domain/daily";
+import { apart, shuffle } from "@modules/daily/domain/daily";
 import { POOL_V1 } from "@modules/daily/domain/pool";
 import { snapshot } from "@modules/dex";
 
@@ -145,11 +145,14 @@ describe("getDaily", () => {
 describe("the Hangman round", () => {
   it("gets its own species, never the Stats & types one of that day", async () => {
     const guessOrder = shuffle(POOL_V1, "d".repeat(32), "v1");
-    const order = shuffle(POOL_V1, "d".repeat(32), "hangman-v1");
+    const order = apart(
+      shuffle(POOL_V1, "d".repeat(32), "hangman-v1"),
+      guessOrder,
+    );
     hangman.getDailyGames.mockResolvedValue([game(9, "playing")]);
     await startDaily("hangman", PLAYER, "2026-10-09", NOW);
     const [, slug] = hangman.createDailyGame.mock.calls[0]!;
-    expect(slug).toBe(dailyAnswer(order, 9, guessOrder[9]));
+    expect(slug).toBe(order[9]);
     expect(slug).not.toBe(guessOrder[9]);
     expect(guess.createDailyGame).not.toHaveBeenCalled();
   });

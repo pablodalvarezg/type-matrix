@@ -5,6 +5,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import type { Progress } from "@modules/hangman/domain/hangman";
 import { Gallows } from "@modules/hangman/ui/Gallows";
+import { serverAhead } from "@shared/game";
 
 type Game = Progress & { id: string };
 
@@ -31,13 +32,11 @@ export function HangmanBoard({
 }) {
   const router = useRouter();
   const [game, setGame] = useState(initial);
-  const tried = (g: Game) => g.guessed.length;
-  const serverAhead =
-    tried(initial) > tried(game) ||
-    (tried(initial) === tried(game) &&
-      initial.status !== "playing" &&
-      game.status === "playing");
-  if (initial !== game && serverAhead) setGame(initial);
+  const at = (g: Game) => ({
+    moves: g.guessed.length,
+    playing: g.status === "playing",
+  });
+  if (initial !== game && serverAhead(at(initial), at(game))) setGame(initial);
   const [pending, setPending] = useState(false);
   const [message, setMessage] = useState<string>();
   const result = useRef<HTMLParagraphElement>(null);

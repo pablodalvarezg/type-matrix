@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 
-import { clock, untilMidnight } from "@modules/daily/domain/countdown";
+import { duration, untilMidnight } from "@modules/daily/domain/time";
 
 /**
  * Time left until the player's date turns and a new puzzle opens. Only the
@@ -21,7 +21,7 @@ export function Countdown() {
 
   return (
     <span className="text-sm text-muted tabular-nums">
-      {left !== undefined && <>Next puzzle in {clock(left)}</>}
+      {left !== undefined && <>Next puzzle in {duration(left)}</>}
     </span>
   );
 }

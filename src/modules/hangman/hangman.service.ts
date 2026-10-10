@@ -1,11 +1,7 @@
 import { randomInt } from "node:crypto";
 
 import { findSpecies, snapshot } from "@modules/dex";
-import {
-  progress,
-  type Progress,
-  type Stop,
-} from "@modules/hangman/domain/hangman";
+import { progress, type Progress } from "@modules/hangman/domain/hangman";
 import {
   addLetter,
   createGame,
@@ -17,6 +13,7 @@ import {
   type GameRow,
 } from "@modules/hangman/hangman.repository";
 import { gameId } from "@modules/hangman/hangman.schema";
+import { stopOf } from "@shared/game";
 
 /** Everything a response or a page may carry. No answer until it is over. */
 export type GameView = Progress & { id: string };
@@ -27,13 +24,6 @@ export type GiveUpError = "not-found" | "over" | "conflict";
 // Stored slugs come from the snapshot. A re-ingest that dropped a species
 // would break its old games here, loudly.
 const nameOf = (slug: string) => findSpecies(slug)!.name;
-
-const stopOf = ({ givenUp, closesAt }: GameRow): Stop | undefined =>
-  givenUp
-    ? "gave-up"
-    : closesAt !== null && closesAt <= new Date()
-      ? "closed"
-      : undefined;
 
 const view = (id: string, game: GameRow): GameView => ({
   id,

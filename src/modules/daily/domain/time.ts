@@ -8,9 +8,14 @@ export function untilMidnight(now: Date): number {
   return midnight.getTime() - now.getTime();
 }
 
-/** h:mm:ss, hours unpadded. */
-export function clock(ms: number): string {
+/** A time to show: m:ss, or h:mm:ss from an hour on. Seconds floor. */
+export function duration(ms: number): string {
   const seconds = Math.max(0, Math.floor(ms / 1000));
   const pad = (n: number) => String(n).padStart(2, "0");
-  return `${Math.floor(seconds / 3600)}:${pad(Math.floor(seconds / 60) % 60)}:${pad(seconds % 60)}`;
+  const [h, m, s] = [
+    Math.floor(seconds / 3600),
+    Math.floor(seconds / 60) % 60,
+    seconds % 60,
+  ];
+  return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${m}:${pad(s)}`;
 }

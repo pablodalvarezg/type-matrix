@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  apart,
   closesAt,
   dailyAnswer,
-  duration,
   isToday,
   puzzleNumber,
   shuffle,
@@ -110,39 +110,37 @@ describe("streaks", () => {
   });
 });
 
-describe("duration", () => {
-  it("is m:ss under an hour, seconds floored", () => {
-    expect(duration(0)).toBe("0:00");
-    expect(duration(59_999)).toBe("0:59");
-    expect(duration(65_000)).toBe("1:05");
-    expect(duration(3_599_999)).toBe("59:59");
-  });
-
-  it("adds hours from an hour on", () => {
-    expect(duration(3_600_000)).toBe("1:00:00");
-    expect(duration(30 * 3_600_000 + 61_000)).toBe("30:01:01");
+describe("dailyAnswer", () => {
+  it("indexes the order by puzzle number, wrapping around", () => {
+    expect(dailyAnswer(["a", "b", "c", "d"], 1)).toBe("b");
+    expect(dailyAnswer(["a", "b", "c", "d"], 5)).toBe("b");
   });
 });
 
-describe("dailyAnswer", () => {
-  const order = ["a", "b", "c", "d"];
-
-  it("indexes the order by puzzle number, wrapping around", () => {
-    expect(dailyAnswer(order, 1)).toBe("b");
-    expect(dailyAnswer(order, 5)).toBe("b");
+describe("apart", () => {
+  it("swaps a clash with the next position", () => {
+    expect(apart(["a", "b", "c", "d"], ["d", "b", "a", "c"])).toEqual([
+      "a",
+      "c",
+      "b",
+      "d",
+    ]);
   });
 
-  it("steps half the order away from a clash with the other round", () => {
-    expect(dailyAnswer(order, 1, "b")).toBe("d");
-    expect(dailyAnswer(order, 1, "c")).toBe("b");
+  it("swaps a clash in the last position with the first", () => {
+    expect(apart(["a", "b", "c"], ["b", "a", "c"])).toEqual(["c", "b", "a"]);
   });
 
-  it("never gives the two rounds the same species", () => {
-    const guess = shuffle(POOL_V1, "s".repeat(32), "v1");
-    const hangman = shuffle(POOL_V1, "s".repeat(32), "hangman-v1");
-    for (let n = 1; n <= POOL_V1.length * 2; n++) {
-      const avoid = dailyAnswer(guess, n);
-      expect(dailyAnswer(hangman, n, avoid)).not.toBe(avoid);
-    }
-  });
+  it.each(["s", "t", "u"])(
+    "keeps every species once and none where the other round has it (secret %s)",
+    (key) => {
+      const guess = shuffle(POOL_V1, key.repeat(32), "v1");
+      const hangman = apart(
+        shuffle(POOL_V1, key.repeat(32), "hangman-v1"),
+        guess,
+      );
+      expect([...hangman].sort()).toEqual([...POOL_V1].sort());
+      expect(hangman.filter((slug, i) => slug === guess[i])).toEqual([]);
+    },
+  );
 });

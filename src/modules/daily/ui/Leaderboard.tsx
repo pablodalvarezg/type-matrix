@@ -1,4 +1,4 @@
-import { duration } from "@modules/daily/domain/daily";
+import { duration } from "@modules/daily/domain/time";
 
 interface Row {
   place: number;

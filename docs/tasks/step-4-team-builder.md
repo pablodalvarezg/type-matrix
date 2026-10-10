@@ -50,6 +50,7 @@ tests del calculador.
     el mejor STAB del equipo no pasa de ×1.
 
   Si no hay huecos, se dice con texto.
+
 - **`index.ts`**.
 
 ### Lo demás
@@ -74,6 +75,7 @@ tests del calculador.
   2. el domain recibe la tabla y multiplica él mismo.
 
   Elegí la que deje el domain más simple y explicá la elección en una línea.
+
 - **`ui` no importa tipos del service**: las props se declaran de forma
   estructural.
 - **Sin `"use client"` nuevos.** `Combobox` ya existe en `shared/ui`; se usa seis
@@ -115,12 +117,12 @@ y conectar el repo es una acción externa que hace Pablo.
 
 ## Decisiones de producto (Pablo, 2026-10-07)
 
-| # | Pregunta | Decisión |
-|---|---|---|
-| 1 | ¿Se puede repetir una especie en el mismo equipo? | No, como la Species Clause. La repetida da error en su campo y no hay resultado |
-| 2 | ¿Se analiza un equipo de menos de 6? | Sí, con los miembros que haya. Sin miembros, no se muestra resultado |
-| 3 | ¿Cómo se llaman los params? | `member.1` … `member.6` |
-| 4 | ¿La cobertura contempla defensores de tipo doble? | Sí: las combinaciones que existen en el snapshot. Los huecos se listan aparte |
+| #   | Pregunta                                          | Decisión                                                                        |
+| --- | ------------------------------------------------- | ------------------------------------------------------------------------------- |
+| 1   | ¿Se puede repetir una especie en el mismo equipo? | No, como la Species Clause. La repetida da error en su campo y no hay resultado |
+| 2   | ¿Se analiza un equipo de menos de 6?              | Sí, con los miembros que haya. Sin miembros, no se muestra resultado            |
+| 3   | ¿Cómo se llaman los params?                       | `member.1` … `member.6`                                                         |
+| 4   | ¿La cobertura contempla defensores de tipo doble? | Sí: las combinaciones que existen en el snapshot. Los huecos se listan aparte   |
 
 Si aparece otra ambigüedad de producto, preguntá antes de asumir.
 

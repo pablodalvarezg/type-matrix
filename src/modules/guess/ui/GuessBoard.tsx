@@ -17,6 +17,7 @@ import {
   type Row,
   type Stat,
 } from "@modules/guess/domain/guess";
+import { serverAhead } from "@shared/game";
 import { Combobox } from "@shared/ui/Combobox";
 
 type Game = Progress & { id: string };
@@ -101,16 +102,11 @@ export function GuessBoard({
 }) {
   const router = useRouter();
   const [game, setGame] = useState(initial);
-  // The server's game is further on with more guesses, or with as many and
-  // over while this one still plays (refreshed after a give-up elsewhere).
-  // Not otherwise: this board's own give-up must not be undone by the stale
-  // payload it had before.
-  const serverAhead =
-    initial.rows.length > game.rows.length ||
-    (initial.rows.length === game.rows.length &&
-      initial.status !== "playing" &&
-      game.status === "playing");
-  if (initial !== game && serverAhead) setGame(initial);
+  const at = (g: Game) => ({
+    moves: g.rows.length,
+    playing: g.status === "playing",
+  });
+  if (initial !== game && serverAhead(at(initial), at(game))) setGame(initial);
   const [pending, setPending] = useState(false);
   const [message, setMessage] = useState<string>();
   const form = useRef<HTMLFormElement>(null);

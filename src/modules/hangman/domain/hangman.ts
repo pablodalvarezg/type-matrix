@@ -40,11 +40,8 @@ export function progress(name: string, letters: string, stop?: Stop): Progress {
   });
   const wrong = [...letters].filter((letter) => !folded.includes(letter));
   const won = !mask.includes(null);
-  const status: Status = won
-    ? "won"
-    : stop || wrong.length >= MAX_WRONG
-      ? "lost"
-      : "playing";
+  const outOfMisses = wrong.length >= MAX_WRONG;
+  const status: Status = won ? "won" : stop || outOfMisses ? "lost" : "playing";
 
   return {
     mask,
@@ -52,7 +49,9 @@ export function progress(name: string, letters: string, stop?: Stop): Progress {
     wrong,
     remaining: MAX_WRONG - wrong.length,
     status,
-    ...(!won && stop && { stopped: stop }),
+    // Only if the stop is what ended it: a game already out of misses was
+    // lost before its puzzle closed.
+    ...(!won && !outOfMisses && stop && { stopped: stop }),
     ...(status !== "playing" && { answer: name }),
   };
 }
