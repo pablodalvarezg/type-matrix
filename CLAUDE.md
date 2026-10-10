@@ -157,15 +157,17 @@ src/
 │     └─ index.ts
 └─ shared/
    ├─ config/                  # env.ts (Zod, server-only) · env-schema.ts (puro)
-   ├─ db/                      # client.ts: neon() sobre HTTP (server-only)
-   ├─ http/                    # require-json.ts: el 415 de toda ruta que emite la cookie
+   ├─ db/                      # client.ts: neon() sobre HTTP (server-only) · rate-limit.ts: hit() por clave y hora
+   ├─ http/                    # require-json.ts: el 415 de toda ruta que emite la cookie · throttle.ts: el 429 por IP
    ├─ ui/                      # Combobox · NewGameButton (cliente)
    └─ search-params.ts         # SearchParams · param(), de los formularios GET
 data/snapshot.json             # generado por scripts/ingest.ts, commiteado
 db/migrations/                 # NNNN_nombre.sql, se aplican en orden y una vez
 scripts/ingest.ts              # PokéAPI → snapshot. Manual, nunca en runtime
 scripts/migrate.ts             # aplica las migraciones pendientes. Manual
-tests/                         # tests que no son de un módulo: boundaries, contraste, no-filtración
+tests/                         # tests que no son de un módulo: boundaries, contraste, no-filtración, throttle de las rutas
+tests/e2e/                     # smoke.e2e.ts: Playwright, un test por modo a 360 px
+docs/adr/                      # NNNN-titulo.md, una decisión de arquitectura por archivo
 ```
 
 ### El snapshot
@@ -358,6 +360,9 @@ Reglas que no se negocian, porque son la tesis:
 - Sin estado global salvo necesidad demostrada.
 - **Tokens semánticos, no valores a mano.** Nada de colores, fuentes, radios ni espaciados hardcodeados en componentes.
 - **`font-variant-numeric: tabular-nums` en toda columna de números** (stats, rangos de daño).
+- **Un contenedor con `overflow-x-auto` que tenga `sr-only` adentro lleva
+  `relative`.** El `sr-only` es `position: absolute`: si el contenedor no está
+  posicionado, se escapa del recorte y le agrega scroll horizontal a la página.
 - **La lógica que puede estar mal va en `domain/`**, no al lado del componente, para que los tests la vean.
 
 ## Calidad
@@ -394,7 +399,22 @@ Reglas que no se negocian, porque son la tesis:
   Por ese envoltorio, la clave `answer` se busca a cualquier profundidad
   (verificado que muerde: con `answer` dentro de `game`, la aserción vieja,
   solo en el primer nivel, pasaba).
-- **Smoke e2e** (Playwright): uno por modo.
+- **Smoke e2e** (Playwright, `tests/e2e/smoke.e2e.ts`): uno por modo más la
+  home, jugando las partidas hasta el final sin saber la respuesta. Corre a
+  360 px y después de cada test comprueba que la página no tiene scroll
+  horizontal (verificado que muerde: encontró el tablero de Stats & types en
+  552 px). `.e2e.ts` y no `.spec.ts`, porque el glob de Vitest toma los specs.
+  Levanta `next build` + `next start` en el puerto 3100 y nunca reusa un
+  servidor: en el 3000 reusaba el `next dev` de Pablo sin avisar. Usa la base
+  de `.env.local` y sus partidas son filas reales: **nunca con `.env.local`
+  apuntando a producción**.
+- **El throttle en local cuenta todo como `::1`.** Next completa
+  `x-forwarded-for` con la dirección del socket cuando falta (verificado en
+  `base-server.js` de 16.3.8), así que `next dev`, el e2e y el juego manual
+  comparten las 60 partidas por hora. Si molesta:
+  `DELETE FROM rate_limits WHERE key LIKE '%::/64'`. Los tests de rutas mockean
+  `@shared/db/rate-limit`; el 429 lo prueba `tests/throttle-routes.test.ts`
+  (verificado que muerde: sin el throttle en una ruta, su caso falla).
 - **Accesibilidad:** HTML semántico, foco visible, contraste AA (ya testeado), navegación por teclado.
 - **Responsive desde 360 px.** Lighthouse ≥ 90 en mobile, medido sobre el deploy.
 - Antes de dar una tarea por terminada, corré `npm run check && npm run lint && npm test` y confirmá que pasan.
@@ -409,10 +429,11 @@ portfolio y de Atlas. Si descubrís algo del entorno que costó averiguar, anota
 - **PowerShell cachea la resolución de comandos.** Después de un `nvm use`, `node -v` puede seguir mostrando la versión vieja en esa terminal. Abrí una nueva para verificar.
 - **`nvm use` cambia la versión de la máquina, no la del directorio.** Hay otro proyecto en Node 20.17. Antes de dar por rota una dependencia, verificá `node -v`.
 - **Git pide elegir cuenta en cada operación si no se fija el usuario.** Ya está fijado en este repo con `git config --local credential.https://github.com.username pablodalvarezg`. Vive en `.git/config`, así que hay que repetirlo si se reclona.
-- **Git tiene `core.autocrlf=true`** y el repo no tiene `.gitattributes`: lo que
-  git escribe al hacer checkout (por ejemplo, volver a `main` después de un merge)
-  queda en CRLF y `prettier --check` lo marca, aunque el contenido no cambió.
-  `TODO(pablo):` un `.gitattributes` con `* text=auto eol=lf` lo resuelve.
+- **Git tiene `core.autocrlf=true`**: lo que git escribía al hacer checkout
+  quedaba en CRLF y `prettier --check` lo marcaba, aunque el contenido no
+  cambió. El `.gitattributes` (`* text=auto eol=lf`) lo resuelve para lo que
+  se escriba de ahora en más. Los archivos que ya están en CRLF en el disco se
+  pasan con `git add --renormalize .` en un commit propio, y eso lo decide Pablo.
 - **Gestor de paquetes: `npm`**, no pnpm. El lockfile es `package-lock.json`.
 - **npm aplana `node_modules`:** un `import` de un paquete no declarado en `package.json` funciona en local y explota en el deploy. Declará toda dependencia que importes, aunque ya esté como transitiva.
 - **npm 11 bloquea los scripts de instalación** salvo los aprobados en `allowScripts`. `unrs-resolver` es el resolver nativo de `eslint-import-resolver-typescript`, y sin su postinstall **las reglas de boundaries pasan en verde sin comprobar nada**. `tests/boundaries.test.ts` es lo que lo detecta.
@@ -442,9 +463,8 @@ npm run format    # prettier --write
 npm test          # vitest
 npm run ingest    # regenera data/snapshot.json desde PokéAPI (~2.800 llamadas, unos minutos)
 npm run db:migrate # aplica db/migrations pendientes; DATABASE_URL de .env.local, o del shell si no existe
+npm run test:e2e  # Playwright; la primera vez, `npx playwright install chromium`
 ```
-
-El que llega con su paso del plan: `npm run test:e2e` (10).
 
 ## Plan
 
@@ -485,7 +505,15 @@ Trabajá solo en el paso actual. No adelantes el siguiente.
       con nickname; un ganador sin nickname ve el form para elegirlo. Se ve al
       terminar la partida, en `/daily/[n]`: top 10 y la fila propia si queda
       más abajo (decidido por Pablo el 2026-10-09).
-- [ ] **10. Cierre** ← siguiente. Incluye el throttle del endpoint de nickname (`TODO(pablo)` en la ruta).
+- [ ] **10. Cierre** ← en curso.
+      - [x] Throttle por IP y hora de las cuatro rutas que agregan filas
+            (`rate_limits`, ADR 0006): 10 nicknames y 60 partidas.
+      - [x] Smoke de Playwright por modo a 360 px, `.gitattributes`, ADRs 0001–0006.
+      - [ ] **Pablo:** deploy en Vercel con las cuatro variables, `LAUNCH_DATE`
+            = día del deploy, `db:migrate` contra la base de producción,
+            Lighthouse mobile sobre la URL y capturas.
+      - [ ] Después: README público con capturas y números medidos, y el
+            "Build plan" sale del README.
 
 ## Forma de trabajo
 

@@ -1,0 +1,3 @@
+# Commit LF everywhere: with core.autocrlf=true and no attributes, checkouts
+# wrote CRLF and prettier --check flagged files whose content had not changed.
+* text=auto eol=lf

@@ -136,6 +136,7 @@ No login and no OAuth.
 - The first time a player saves something (a nickname, a game), the server issues a random player id in a signed `httpOnly` cookie. Visitors who only look leave no row behind.
 - The player picks a nickname the first time they appear on a leaderboard: 3 to 16 letters, digits, `_` or `-`, unique regardless of case (a database index, not application code).
 - Accepted ceiling: clearing the cookie means starting over with no streak. If that becomes a real problem, a magic-link login is the upgrade.
+- The routes that add rows (a nickname, a new game) are throttled per IP and hour, counted in Postgres: a script that drops its cookie would otherwise be a new player on every call. Guesses need no limit, since each game caps them.
 
 ### Environment variables
 
@@ -165,12 +166,12 @@ src/
 │  ├─ team/                      # Weaknesses and coverage. Pure domain
 │  ├─ hangman/                   # Name normalisation and masking (domain), game service, repository
 │  ├─ guess/                     # Stats & types feedback (domain), game service, repository
-│  ├─ daily/                     # Puzzle number, timezone window, seeded selection, streaks
-│  ├─ players/                   # Cookie identity, nickname
-│  └─ leaderboard/
+│  ├─ daily/                     # Puzzle number, timezone window, seeded selection, streaks, leaderboard
+│  └─ players/                   # Cookie identity, nickname
 └─ shared/
    ├─ ui/                        # Design-system primitives
-   ├─ db/                        # Neon client
+   ├─ db/                        # Neon client, rate-limit counter
+   ├─ http/                      # JSON-only guard and throttle of the routes that add rows
    └─ config/                    # env.ts
 ```
 
@@ -230,6 +231,7 @@ A daily game is a Stats & types game with a puzzle number: same rules, same boar
 ```bash
 nvm use 24.21.0
 npm install
+npx playwright install chromium   # once, for npm run test:e2e
 cp .env.example .env.local   # and fill it in
 npm run db:migrate
 npm run dev                  # http://localhost:3000
@@ -242,7 +244,7 @@ npm run dev                  # http://localhost:3000
 | `npm run check` | `tsc --noEmit` |
 | `npm run lint` | ESLint, including the boundaries rules |
 | `npm test` | Vitest |
-| `npm run test:e2e` | Playwright |
+| `npm run test:e2e` | Playwright smoke, one test per mode at 360 px, against a production build on :3100 |
 | `npm run ingest` | Regenerates `data/snapshot.json` from PokéAPI |
 | `npm run db:migrate` | Applies pending migrations |
 
