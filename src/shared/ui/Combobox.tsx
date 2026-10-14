@@ -180,7 +180,13 @@ export function Combobox({
                 event.preventDefault();
                 choose(option);
               }}
-              onMouseMove={() => setActive(index)}
+              // Mouse only. iOS Safari fires a mousemove before a tap's
+              // mousedown, and if that changes the content it takes the tap
+              // as a hover and drops the mousedown: the first tap only
+              // highlighted the option.
+              onPointerMove={(event) => {
+                if (event.pointerType === "mouse") setActive(index);
+              }}
               className="px-2 py-1 aria-selected:bg-background aria-selected:underline"
             >
               <span aria-hidden className="inline-block w-3">
