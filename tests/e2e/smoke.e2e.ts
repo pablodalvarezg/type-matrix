@@ -77,22 +77,28 @@ test("hangman campaign: a Gen I game, then the next one", async ({ page }) => {
   await expect(page.getByRole("button", { name: "Play Gen I" })).toBeVisible();
 });
 
-test("stats & types: resumed from the breadcrumb, then given up", async ({
+test("dex clues: a hint, resumed from the breadcrumb, then given up", async ({
   page,
 }) => {
   await page.goto("/guess");
   await page.getByRole("button", { name: "New game" }).click();
   await page.waitForURL(/\/guess\/[\w-]+$/);
   const game = page.url();
-  await page.getByRole("combobox", { name: "Species" }).fill("Bulbasaur");
-  await page.getByRole("button", { name: "Guess" }).click();
-  await expect(page.getByRole("status").first()).toContainText("Bulbasaur:");
+  // Three misses unlock the generation. One in ~340 games one of them is
+  // the answer: the game ends, and the next guess or the hint check fails.
+  // The client cannot know.
+  for (const name of ["Bulbasaur", "Charmander", "Squirtle"]) {
+    await page.getByRole("combobox", { name: "Species" }).fill(name);
+    await page.getByRole("button", { name: "Guess" }).click();
+    await expect(page.getByRole("status").first()).toContainText(`${name}:`);
+  }
+  await expect(page.getByText(/^Gen [IVX]+$/)).toBeVisible();
 
   // Leaving keeps the game open: the mode's page offers it back.
-  await page.getByRole("link", { name: "← Stats & types" }).click();
+  await page.getByRole("link", { name: "← Dex Clues" }).click();
   await page.getByRole("link", { name: "Continue your game" }).click();
   await page.waitForURL(game);
-  await expect(page.getByRole("region", { name: "Guesses" })).toContainText(
+  await expect(page.getByRole("list", { name: "Your guesses" })).toContainText(
     "Bulbasaur",
   );
 
@@ -104,14 +110,12 @@ test("stats & types: resumed from the breadcrumb, then given up", async ({
   await expect(page.getByRole("button", { name: "Play again" })).toBeVisible();
 });
 
-test("daily stats & types: played out, with its streak", async ({ page }) => {
+test("daily dex clues: played out, with its streak", async ({ page }) => {
   await page.goto("/daily");
-  await page
-    .getByRole("button", { name: "Play today's Stats & types" })
-    .click();
+  await page.getByRole("button", { name: "Play today's Dex Clues" }).click();
   await page.waitForURL(/\/daily\/guess\/\d+$/);
   await expect(
-    page.getByRole("heading", { name: /Daily Stats & types #\d+/ }),
+    page.getByRole("heading", { name: /Daily Dex Clues #\d+/ }),
   ).toBeVisible();
   await playOut(page);
   await expect(page.getByText(/Streak: \d+ · best \d+/)).toBeVisible();
@@ -146,7 +150,7 @@ async function spellOut(page: Page) {
   await expect(status).toContainText(OVER);
 }
 
-/** Guesses distinct species until the game ends; eight are always enough. */
+/** Guesses distinct species until the game ends; ten are always enough. */
 async function playOut(page: Page) {
   const status = page
     .getByRole("status")
@@ -161,6 +165,8 @@ async function playOut(page: Page) {
     "Dragonite",
     "Mewtwo",
     "Eevee",
+    "Lapras",
+    "Jigglypuff",
   ];
   for (const name of guesses) {
     const field = page.getByRole("combobox", { name: "Species" });

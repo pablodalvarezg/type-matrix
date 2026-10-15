@@ -7,14 +7,14 @@ import { NewGameButton } from "@shared/ui/NewGameButton";
 export const metadata: Metadata = {
   title: "Daily puzzle · Type Matrix",
   description:
-    "A Stats & types round and a Hangman round a day, the same for everyone.",
+    "A Dex Clues round and a Hangman round a day, the same for everyone.",
 };
 
 const ROUNDS = [
   {
     mode: "guess",
-    name: "Stats & types",
-    blurb: "Guess the species from its types and base stats.",
+    name: "Dex Clues",
+    blurb: "Guess the species from its dex entry.",
   },
   {
     mode: "hangman",

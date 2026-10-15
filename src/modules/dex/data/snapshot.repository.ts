@@ -2,6 +2,7 @@ import "server-only";
 
 import raw from "@data/snapshot.json";
 import { parseSnapshot } from "@modules/dex/dex.schema";
+import { stages } from "@modules/dex/domain/evolution";
 
 /*
  * `server-only` is the leak guard, not a formality: this object holds every
@@ -25,3 +26,8 @@ const movesByKey = byKey(snapshot.moves);
 
 export const findSpecies = (query: string) => speciesByKey.get(key(query));
 export const findMove = (query: string) => movesByKey.get(key(query));
+
+const stagesBySlug = stages(snapshot.species);
+
+/** 1, 2 or 3: where a snapshot species sits in its evolution line. */
+export const stageOf = (slug: string) => stagesBySlug.get(slug)!;

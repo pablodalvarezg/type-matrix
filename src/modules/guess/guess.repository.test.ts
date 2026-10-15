@@ -5,6 +5,7 @@ import {
   createGame,
   findDailyGames,
   findGame,
+  findHistory,
   giveUp,
 } from "@modules/guess/guess.repository";
 
@@ -41,6 +42,45 @@ describe("guess repository", () => {
   it("finds nothing for another player's game", async () => {
     sql.mockResolvedValueOnce([]);
     expect(await findGame(GAME, PLAYER)).toBeUndefined();
+  });
+
+  it("maps the player's free-play history, with the seconds to win", async () => {
+    sql.mockResolvedValueOnce([
+      {
+        id: GAME,
+        species_slug: "mr-mime",
+        guesses: ["bulbasaur", "mr-mime"],
+        closes_at: null,
+        given_up_at: null,
+        seconds: 42,
+      },
+      {
+        id: PLAYER,
+        species_slug: "pikachu",
+        guesses: [],
+        closes_at: null,
+        given_up_at: null,
+        seconds: null,
+      },
+    ]);
+    expect(await findHistory(PLAYER)).toEqual([
+      {
+        id: GAME,
+        speciesSlug: "mr-mime",
+        guesses: ["bulbasaur", "mr-mime"],
+        closesAt: null,
+        givenUp: false,
+        seconds: 42,
+      },
+      {
+        id: PLAYER,
+        speciesSlug: "pikachu",
+        guesses: [],
+        closesAt: null,
+        givenUp: false,
+        seconds: null,
+      },
+    ]);
   });
 
   it("appends the guess when nobody got there first", async () => {

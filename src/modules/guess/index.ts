@@ -7,7 +7,8 @@ export { guessBody } from "@modules/guess/guess.schema";
 export {
   getDailyGames,
   getGame,
-  getOpenGame,
+  getOverview,
+  getStreaks,
   giveUp,
   guess,
   speciesNames,

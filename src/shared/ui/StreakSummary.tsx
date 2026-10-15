@@ -1,4 +1,4 @@
-import type { Run } from "@modules/hangman/domain/score";
+import type { Run } from "@shared/score";
 
 const run = ({ wins, points }: Run) =>
   `${points.toLocaleString("en")} points (${wins} ${wins === 1 ? "win" : "wins"})`;

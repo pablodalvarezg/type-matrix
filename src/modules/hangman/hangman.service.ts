@@ -6,8 +6,11 @@ import {
   canPick,
   type Campaign,
 } from "@modules/hangman/domain/campaign";
-import { progress, type Progress } from "@modules/hangman/domain/hangman";
-import { points, streaks } from "@modules/hangman/domain/score";
+import {
+  MAX_WRONG,
+  progress,
+  type Progress,
+} from "@modules/hangman/domain/hangman";
 import {
   addLetter,
   createGame,
@@ -21,6 +24,7 @@ import {
 } from "@modules/hangman/hangman.repository";
 import { gameId } from "@modules/hangman/hangman.schema";
 import { stopOf } from "@shared/game";
+import { points, streaks } from "@shared/score";
 
 /** Everything a response or a page may carry. No answer until it is over. */
 export type GameView = Progress & { id: string };
@@ -78,7 +82,12 @@ const streaksOf = (games: History) =>
         ? []
         : g.status === "won"
           ? // A win from before won_at was stamped scores no time bonus.
-            [points(g.game.wrong.length, g.seconds ?? Number.POSITIVE_INFINITY)]
+            [
+              points(
+                MAX_WRONG - g.game.wrong.length,
+                g.seconds ?? Number.POSITIVE_INFINITY,
+              ),
+            ]
           : [null],
     ),
   );

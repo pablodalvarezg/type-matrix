@@ -44,18 +44,30 @@ export async function findGame(
   return row && gameRow(row);
 }
 
+export type HistoryRow = GameRow & {
+  id: string;
+  /** From creation to the winning guess, by the database; null if not won. */
+  seconds: number | null;
+};
+
 /**
- * The player's latest free-play game. Only it can still be open: a new one
- * is made only once it is over.
+ * Every free-play game of the player, oldest first. The open game and the
+ * streak come from it.
+ * ponytail: the whole history on each read, like Hangman's; keep running
+ * totals if it ever shows up in a profile.
  */
-export async function findLatestGame(
-  playerId: string,
-): Promise<(GameRow & { id: string }) | undefined> {
-  const [row] = await sql`
-    SELECT id, species_slug, guesses, closes_at, given_up_at FROM guess_games
+export async function findHistory(playerId: string): Promise<HistoryRow[]> {
+  const rows = await sql`
+    SELECT id, species_slug, guesses, closes_at, given_up_at,
+      floor(extract(epoch FROM won_at - created_at))::int AS seconds
+    FROM guess_games
     WHERE player_id = ${playerId} AND puzzle IS NULL
-    ORDER BY created_at DESC LIMIT 1`;
-  return row && { id: row.id as string, ...gameRow(row) };
+    ORDER BY created_at, id`;
+  return rows.map((row) => ({
+    id: row.id as string,
+    ...gameRow(row),
+    seconds: (row.seconds as number | null) ?? null,
+  }));
 }
 
 /**

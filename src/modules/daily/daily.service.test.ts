@@ -143,7 +143,7 @@ describe("getDaily", () => {
 });
 
 describe("the Hangman round", () => {
-  it("gets its own species, never the Stats & types one of that day", async () => {
+  it("gets its own species, never the Dex Clues one of that day", async () => {
     const guessOrder = shuffle(POOL_V1, "d".repeat(32), "v1");
     const order = apart(
       shuffle(POOL_V1, "d".repeat(32), "hangman-v1"),

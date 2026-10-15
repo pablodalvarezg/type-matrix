@@ -10,25 +10,29 @@ import {
 } from "react";
 
 import {
-  STATS,
+  HINTS_AT,
+  kilos,
+  metres,
+  SCALES,
   type Arrow,
   type Entry,
+  type Hints,
+  type Initial,
   type Progress,
   type Row,
-  type Stat,
+  type Scale,
 } from "@modules/guess/domain/guess";
 import { serverAhead } from "@shared/game";
+import { describeShape } from "@shared/name-shape";
 import { Combobox } from "@shared/ui/Combobox";
 
 type Game = Progress & { id: string };
 
-const STAT_LABELS: Record<Stat, string> = {
-  hp: "HP",
-  atk: "Atk",
-  def: "Def",
-  spa: "SpA",
-  spd: "SpD",
-  spe: "Spe",
+const LABELS: Record<Scale, string> = {
+  generation: "Generation",
+  stage: "Stage",
+  height: "Height",
+  weight: "Weight",
 };
 
 // Symbol shown, words spoken: feedback never rests on the symbol alone.
@@ -37,8 +41,8 @@ const ARROWS: Record<Arrow, [string, string]> = {
   lower: ["↓", "the answer's is lower"],
   equal: ["=", "equal"],
 };
-const HIT: [string, string] = ["✓", "in the answer"];
-const MISS: [string, string] = ["✗", "not in the answer"];
+const HIT: [string, string] = ["✓", "the answer's"];
+const MISS: [string, string] = ["✗", "not the answer's"];
 const EXACT: [string, string] = ["=", "exactly its types"];
 
 function Feedback({ mark: [symbol, words] }: { mark: [string, string] }) {
@@ -51,7 +55,19 @@ function Feedback({ mark: [symbol, words] }: { mark: [string, string] }) {
   );
 }
 
-const typesOf = (entry: Entry) => entry.types.join(" / ");
+// Not CSS `capitalize`: from md the sr-only label before the value runs
+// into it, and "Typesfighting" is one word.
+const title = (word: string) => word.charAt(0).toUpperCase() + word.slice(1);
+
+/** How each scale reads, given every generation's name. */
+const formatOf = (
+  generations: string[],
+): Record<Scale, (n: number) => string> => ({
+  generation: (n) => generations[n - 1]!,
+  stage: String,
+  height: metres,
+  weight: kilos,
+});
 
 /** Each type of a guess with its own mark, and = when they are the answer's. */
 function TypeHits({ row }: { row: Row }) {
@@ -60,7 +76,7 @@ function TypeHits({ row }: { row: Row }) {
       {row.types.map((type, index) => (
         <span key={type}>
           {index > 0 && " / "}
-          {type}
+          {title(type)}
           <Feedback mark={row.typeHits[index] ? HIT : MISS} />
         </span>
       ))}
@@ -69,19 +85,123 @@ function TypeHits({ row }: { row: Row }) {
   );
 }
 
-/** What a guess said about the types, for the status line. */
-const typesSaid = (row: Row) =>
-  row.typeMatch === "exact"
-    ? "exactly the answer's types"
-    : row.types
-        .map((type, i) => `${type} ${row.typeHits[i] ? HIT[1] : MISS[1]}`)
-        .join(", ");
+/** Everything a guess said, for the status line. */
+function said(row: Row, format: Record<Scale, (n: number) => string>) {
+  const types =
+    row.typeMatch === "exact"
+      ? "exactly the answer's types"
+      : row.types
+          .map((type, i) => `${type} ${row.typeHits[i] ? HIT[1] : MISS[1]}`)
+          .join(", ");
+  const color = `${row.color} ${row.colorHit ? HIT[1] : MISS[1]}`;
+  const scales = SCALES.map(
+    (scale) =>
+      `${LABELS[scale].toLowerCase()} ${format[scale](row[scale])}, ${ARROWS[row.arrows[scale]][1]}`,
+  );
+  return `${row.name}: ${types}; ${color}; ${scales.join("; ")}.`;
+}
 
 /*
- * The board holds only what the server sent: one row per guess with its
- * feedback. Each guess is a POST and the response replaces the whole game,
- * so the answer reaches this component only in the response that ends it,
- * or in the one that gives it up.
+ * One markup for both layouts. Below md each guess is a card, every value
+ * with its label. From md the cards line up as rows of one grid (subgrid),
+ * the labels go to screen readers only and a header row shows them once.
+ * Every level sets its column gap: a subgrid's own gap replaces its parent's.
+ */
+const GRID =
+  "md:grid md:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)_repeat(5,auto)]";
+const ROW = "md:col-span-full md:grid md:grid-cols-subgrid md:gap-x-4";
+
+function Cell({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="flex gap-2 md:block">
+      <span className="w-24 shrink-0 text-muted md:sr-only">{label}</span>
+      <span>{children}</span>
+    </div>
+  );
+}
+
+function Card({
+  entry,
+  format,
+  row,
+  answer,
+}: {
+  entry: Entry;
+  format: Record<Scale, (n: number) => string>;
+  row?: Row;
+  answer?: boolean;
+}) {
+  const scaleCell = (scale: Scale) => (
+    <Cell key={scale} label={LABELS[scale]}>
+      {format[scale](entry[scale])}
+      {row && <Feedback mark={ARROWS[row.arrows[scale]]} />}
+    </Cell>
+  );
+  return (
+    <div
+      className={`${ROW} flex animate-fade flex-col gap-1 border border-muted p-3 md:border-0 md:border-b md:px-0 md:py-1 ${answer ? "font-bold" : ""}`}
+    >
+      <span className="font-bold">
+        {answer && "Answer: "}
+        {entry.name}
+      </span>
+      <Cell label="Types">
+        {row ? <TypeHits row={row} /> : entry.types.map(title).join(" / ")}
+      </Cell>
+      {SCALES.slice(0, 2).map(scaleCell)}
+      <Cell label="Color">
+        {title(entry.color)}
+        {row && <Feedback mark={row.colorHit ? HIT : MISS} />}
+      </Cell>
+      {SCALES.slice(2).map(scaleCell)}
+    </div>
+  );
+}
+
+/** "starts with M · 2 + 4 letters, with a space" */
+const shapeOf = (initial: Initial) =>
+  `starts with ${initial.letter} · ${describeShape(initial)}`;
+
+/** What the misses unlocked, and when the rest unlock. */
+function HintList({
+  hints,
+  format,
+}: {
+  hints: Hints;
+  format: Record<Scale, (n: number) => string>;
+}) {
+  const locked = (at: number) => (
+    <span className="text-muted">after {at} misses</span>
+  );
+  return (
+    <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
+      <dt className="text-muted">Generation</dt>
+      <dd className="animate-pop" key={hints.generation}>
+        {hints.generation
+          ? format.generation(hints.generation)
+          : locked(HINTS_AT.generation)}
+      </dd>
+      <dt className="text-muted">Types</dt>
+      <dd className="animate-pop" key={String(hints.types)}>
+        {hints.types
+          ? hints.types.map(title).join(" / ")
+          : locked(HINTS_AT.types)}
+      </dd>
+      <dt className="text-muted">Name</dt>
+      <dd className="animate-pop" key={hints.initial?.letter}>
+        {hints.initial ? shapeOf(hints.initial) : locked(HINTS_AT.initial)}
+      </dd>
+    </dl>
+  );
+}
+
+const hintCount = (hints: Hints) => Object.keys(hints).length;
+
+/*
+ * The board holds only what the server sent: one card per guess with its
+ * feedback, and the hints the misses unlocked. Each guess is a POST and the
+ * response replaces the whole game, so the answer reaches this component
+ * only in the response that ends it, or in the one that gives it up.
  * The species names are the guess space, every one of them.
  *
  * A 409 means the page payload is behind the server (back and forward reuse
@@ -94,10 +214,13 @@ const typesSaid = (row: Row) =>
 export function GuessBoard({
   initial,
   names,
+  generations,
   children,
 }: {
   initial: Game;
   names: string[];
+  /** Every generation's name, Gen I first. */
+  generations: string[];
   children?: ReactNode;
 }) {
   const router = useRouter();
@@ -108,10 +231,11 @@ export function GuessBoard({
   });
   if (initial !== game && serverAhead(at(initial), at(game))) setGame(initial);
   const [pending, setPending] = useState(false);
-  const [message, setMessage] = useState<string>();
+  const [message, setMessage] = useState<ReactNode>();
   const form = useRef<HTMLFormElement>(null);
   const result = useRef<HTMLParagraphElement>(null);
   const played = useRef(false);
+  const format = formatOf(generations);
 
   const over = game.status !== "playing";
   const count = game.rows.length;
@@ -128,7 +252,7 @@ export function GuessBoard({
   async function send(
     path: string,
     body: object,
-    said: (next: Game) => string,
+    toSay: (next: Game) => ReactNode,
   ) {
     played.current = true;
     setPending(true);
@@ -142,7 +266,7 @@ export function GuessBoard({
     if (response?.ok && data) {
       const next = data as Game;
       setGame(next);
-      setMessage(said(next));
+      setMessage(toSay(next));
       if (next.status !== "playing") router.refresh();
     } else {
       setMessage(data?.error ?? "Could not reach the server. Try again.");
@@ -159,7 +283,18 @@ export function GuessBoard({
     if (pending || !species) return;
     void send("guesses", { species }, (next) => {
       const row = next.rows.at(-1);
-      return row ? `${row.name}: ${typesSaid(row)}.` : "";
+      if (!row) return "";
+      const unlocked =
+        next.status === "playing" &&
+        hintCount(next.hints) > hintCount(game.hints);
+      // The card already shows it all: the full sentence is for screen readers.
+      return (
+        <>
+          <span aria-hidden="true">{row.name}.</span>
+          <span className="sr-only">{said(row, format)}</span>
+          {unlocked && " New hint."}
+        </>
+      );
     });
   }
 
@@ -178,73 +313,46 @@ export function GuessBoard({
   return (
     <section className="flex flex-col gap-6 border border-muted bg-surface p-4">
       <p className="text-sm text-muted">
-        Types: ✓ in the answer · ✗ not · = exactly its types. Stats: ↑ the
-        answer&apos;s is higher · ↓ lower · = equal.
+        Types and color: ✓ the answer&apos;s · ✗ not · = exactly its types.
+        Generation, stage, height and weight: ↑ the answer&apos;s is higher · ↓
+        lower · = equal.
       </p>
+
+      <section aria-labelledby="hints" className="flex flex-col gap-2">
+        <h2 id="hints" className="font-bold">
+          Hints
+        </h2>
+        <HintList hints={game.hints} format={format} />
+      </section>
 
       {(count > 0 || game.answer) && (
         <div
-          role="region"
-          aria-label="Guesses"
-          tabIndex={0}
-          className="relative overflow-x-auto focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground"
+          className={`relative flex flex-col gap-2 text-sm tabular-nums ${GRID}`}
         >
-          <table className="w-full text-left text-sm tabular-nums">
-            <caption className="sr-only">
-              Your guesses, each compared with the answer
-            </caption>
-            <thead>
-              <tr className="border-b border-muted">
-                <th scope="col" className="py-1 pr-3">
-                  Species
-                </th>
-                <th scope="col" className="py-1 pr-3">
-                  Types
-                </th>
-                {STATS.map((stat) => (
-                  <th key={stat} scope="col" className="py-1 pr-3">
-                    {STAT_LABELS[stat]}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {game.rows.map((row) => (
-                <tr key={row.name} className="animate-fade">
-                  <th scope="row" className="py-1 pr-3 whitespace-nowrap">
-                    {row.name}
-                  </th>
-                  <td className="py-1 pr-3 whitespace-nowrap capitalize">
-                    <TypeHits row={row} />
-                  </td>
-                  {STATS.map((stat) => (
-                    <td key={stat} className="py-1 pr-3 whitespace-nowrap">
-                      {row.stats[stat]}
-                      <Feedback mark={ARROWS[row.arrows[stat]]} />
-                    </td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-            {game.answer && (
-              <tfoot>
-                <tr className="animate-fade border-t border-muted font-bold">
-                  <th scope="row" className="py-1 pr-3 whitespace-nowrap">
-                    <span className="sr-only">Answer: </span>
-                    {game.answer.name}
-                  </th>
-                  <td className="py-1 pr-3 whitespace-nowrap capitalize">
-                    {typesOf(game.answer)}
-                  </td>
-                  {STATS.map((stat) => (
-                    <td key={stat} className="py-1 pr-3">
-                      {game.answer?.stats[stat]}
-                    </td>
-                  ))}
-                </tr>
-              </tfoot>
-            )}
-          </table>
+          <div
+            aria-hidden="true"
+            className={`hidden border-b border-muted py-1 font-bold ${ROW}`}
+          >
+            <span>Species</span>
+            <span>Types</span>
+            <span>{LABELS.generation}</span>
+            <span>{LABELS.stage}</span>
+            <span>Color</span>
+            <span>{LABELS.height}</span>
+            <span>{LABELS.weight}</span>
+          </div>
+          <ol
+            role="list"
+            aria-label="Your guesses"
+            className={`flex flex-col gap-2 md:gap-y-0 ${ROW}`}
+          >
+            {game.rows.map((row) => (
+              <li key={row.name} className={ROW}>
+                <Card entry={row} row={row} format={format} />
+              </li>
+            ))}
+          </ol>
+          {game.answer && <Card entry={game.answer} format={format} answer />}
         </div>
       )}
 
@@ -254,10 +362,11 @@ export function GuessBoard({
         tabIndex={-1}
         className="font-bold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground"
       >
-        {message && `${message} `}
+        {message && <>{message} </>}
         {game.status === "won" && `Got it: ${game.answer?.name}.`}
         {game.status === "lost" && `${ending}. It was ${game.answer?.name}.`}
-        {!over && `${game.remaining} guesses left.`}
+        {!over &&
+          `${game.remaining} ${game.remaining === 1 ? "guess" : "guesses"} left.`}
       </p>
 
       {over ? (

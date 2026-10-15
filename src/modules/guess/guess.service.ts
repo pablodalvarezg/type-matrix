@@ -1,7 +1,8 @@
 import { randomInt } from "node:crypto";
 
-import { findSpecies, snapshot } from "@modules/dex";
+import { findSpecies, generationOf, snapshot, stageOf } from "@modules/dex";
 import {
+  MAX_GUESSES,
   progress,
   type Entry,
   type Progress,
@@ -11,12 +12,13 @@ import {
   createGame,
   findDailyGames,
   findGame,
-  findLatestGame,
+  findHistory,
   giveUp as storeGiveUp,
   type GameRow,
 } from "@modules/guess/guess.repository";
 import { gameId } from "@modules/guess/guess.schema";
 import { stopOf } from "@shared/game";
+import { points, streaks } from "@shared/score";
 
 /** Everything a response or a page may carry. No answer until it is over. */
 type GameView = Progress & { id: string };
@@ -28,13 +30,21 @@ export type GiveUpError = "not-found" | "over" | "conflict";
 /** The guess space for autocomplete. Every name, so it says nothing. */
 export const speciesNames = snapshot.species.map((species) => species.name);
 
-// Picked field by field: the species also carries its dex number and moves,
-// and nothing about the answer beyond these may reach a response.
+// Picked field by field: the species also carries its dex number, slug and
+// moves, and nothing about the answer beyond these may reach a response.
 // Stored slugs come from the snapshot; a re-ingest that dropped one breaks
 // its old games here, loudly.
 function entryOf(slug: string): Entry {
-  const { name, types, stats } = findSpecies(slug)!;
-  return { name, types, stats };
+  const { id, name, types, color, height, weight } = findSpecies(slug)!;
+  return {
+    name,
+    types,
+    generation: generationOf(id),
+    stage: stageOf(slug),
+    color,
+    height,
+    weight,
+  };
 }
 
 const view = (id: string, game: GameRow): GameView => ({
@@ -49,18 +59,63 @@ const view = (id: string, game: GameRow): GameView => ({
 const load = async (id: string, playerId: string) =>
   gameId.safeParse(id).success ? findGame(id, playerId) : undefined;
 
-/** The player's free-play game still being played, if there is one. */
-export async function getOpenGame(
-  playerId: string,
-): Promise<GameView | undefined> {
-  const latest = await findLatestGame(playerId);
-  const game = latest && view(latest.id, latest);
-  return game?.status === "playing" ? game : undefined;
+/**
+ * The free-play games, oldest first, each with its status. As in Hangman,
+ * only the last can be open, and a playing game before it lost a race
+ * between two starts: it counts as lost.
+ * ponytail: it stays playable by its id, and winning it there still counts;
+ * check "is it the latest" in guess() if that is ever abused.
+ */
+async function history(playerId: string) {
+  const rows = await findHistory(playerId);
+  return rows.map((row, index) => {
+    const game = view(row.id, row);
+    const superseded = index < rows.length - 1 && game.status === "playing";
+    return { ...row, game, status: superseded ? "lost" : game.status };
+  });
+}
+
+type History = Awaited<ReturnType<typeof history>>;
+
+const openOf = (games: History) => {
+  const last = games.at(-1);
+  return last?.status === "playing" ? last.game : undefined;
+};
+
+const streaksOf = (games: History) =>
+  streaks(
+    games.flatMap((g) =>
+      g.status === "playing"
+        ? []
+        : g.status === "won"
+          ? // A win from before won_at was stamped scores no time bonus.
+            [
+              points(
+                MAX_GUESSES - g.guesses.length,
+                g.seconds ?? Number.POSITIVE_INFINITY,
+              ),
+            ]
+          : [null],
+    ),
+  );
+
+/** The player's free-play streaks: the run still going and their best. */
+export async function getStreaks(playerId: string) {
+  return streaksOf(await history(playerId));
+}
+
+/**
+ * What the mode's page shows: the open game and the streaks. A visitor
+ * without a cookie has played nothing yet.
+ */
+export async function getOverview(playerId: string | undefined) {
+  const games = playerId ? await history(playerId) : [];
+  return { open: openOf(games)?.id, streaks: streaksOf(games) };
 }
 
 /** The open game, or a new one: one free-play game at a time. */
 export async function startGame(playerId: string): Promise<GameView> {
-  const open = await getOpenGame(playerId);
+  const open = openOf(await history(playerId));
   if (open) return open;
   const species = snapshot.species[randomInt(snapshot.species.length)]!;
   const id = await createGame(playerId, species.slug);

@@ -63,10 +63,15 @@ const speciesList = z.object({ results: z.array(named) });
 const speciesSchema = z.object({
   id: z.number().int(),
   names: z.array(z.object({ name: z.string(), language: named })),
+  color: named,
+  evolves_from_species: named.nullable(),
   varieties: z.array(z.object({ is_default: z.boolean(), pokemon: named })),
 });
 
 const pokemonSchema = z.object({
+  // Decimetres and hectograms, as PokéAPI gives them: exact integers.
+  height: z.number().int(),
+  weight: z.number().int(),
   types: z.array(z.object({ slot: z.number(), type: named })),
   stats: z.array(z.object({ base_stat: z.number().int(), stat: named })),
   moves: z.array(
@@ -230,6 +235,11 @@ async function main() {
       ]),
     ),
     moves: learnsets[i]!.filter((move) => kept.has(move)).sort(),
+    color: species.color.name,
+    // A species slug; the evolution stage is derived from it in dex/domain.
+    evolvesFrom: species.evolves_from_species?.name ?? null,
+    height: pokemon.height,
+    weight: pokemon.weight,
   }));
 
   const typeChart = Object.fromEntries(

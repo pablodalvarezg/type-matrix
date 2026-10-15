@@ -4,6 +4,7 @@ import {
   findMove,
   findSpecies,
   snapshot,
+  stageOf,
 } from "@modules/dex/data/snapshot.repository";
 import type { TypeName } from "@modules/dex/domain/dex";
 import { effectiveness } from "@modules/dex/domain/effectiveness";
@@ -108,6 +109,32 @@ describe("generations", () => {
     ["pecharunt", 9],
   ])("puts %s in generation %i", (slug, gen) => {
     expect(generationOf(findSpecies(slug)!.id)).toBe(gen);
+  });
+});
+
+describe("evolution stages", () => {
+  it.each([
+    ["pichu", 1],
+    ["pikachu", 2],
+    ["raichu", 3],
+    ["mr-mime", 2],
+    ["eevee", 1],
+    ["minior", 1],
+    // Its pre-evolution is Galarian Meowth, a form the snapshot leaves out.
+    ["perrserker", 2],
+  ])("puts %s at stage %i", (slug, stage) => {
+    expect(stageOf(slug)).toBe(stage);
+  });
+});
+
+describe("color, height and weight", () => {
+  it.each([
+    ["pikachu", "yellow", 4, 60],
+    ["snorlax", "black", 21, 4600],
+    ["wailord", "blue", 145, 3980],
+    ["gengar", "purple", 15, 405],
+  ])("has %s as %s, %i dm and %i hg", (slug, color, height, weight) => {
+    expect(findSpecies(slug)).toMatchObject({ color, height, weight });
   });
 });
 

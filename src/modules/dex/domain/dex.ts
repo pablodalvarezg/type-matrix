@@ -41,7 +41,31 @@ export interface Species {
   stats: BaseStats;
   /** Slugs of the damaging moves it can learn. See scripts/ingest.ts for which game. */
   moves: string[];
+  /** Its Pokédex color. */
+  color: Color;
+  /** The slug of the species it evolves from, if any. */
+  evolvesFrom: string | null;
+  /** In decimetres, as PokéAPI gives it. */
+  height: number;
+  /** In hectograms, as PokéAPI gives it. */
+  weight: number;
 }
+
+/** PokéAPI's Pokédex colors. */
+export const COLORS = [
+  "black",
+  "blue",
+  "brown",
+  "gray",
+  "green",
+  "pink",
+  "purple",
+  "red",
+  "white",
+  "yellow",
+] as const;
+
+export type Color = (typeof COLORS)[number];
 
 export interface Move {
   slug: string;

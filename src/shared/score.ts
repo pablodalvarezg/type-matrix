@@ -1,17 +1,15 @@
-import { MAX_WRONG } from "@modules/hangman/domain/hangman";
-
 // TODO(pablo): the formula decided on 2026-10-14; tune once people play it.
 const BASE = 100;
-const PER_MISS_LEFT = 20;
+const PER_TRY_LEFT = 20;
 const TIME_LIMIT_SECONDS = 180;
 
-/** A free-play win, timed in whole seconds: fewer misses and less time score more. */
-export function points(misses: number, seconds: number): number {
-  return (
-    BASE +
-    PER_MISS_LEFT * (MAX_WRONG - misses) +
-    Math.max(TIME_LIMIT_SECONDS - seconds, 0)
-  );
+/**
+ * A free-play win, timed in whole seconds. `left` is what the player did not
+ * spend: misses in Hangman, guesses in Dex Clues. Fewer spent and less time
+ * score more.
+ */
+export function points(left: number, seconds: number): number {
+  return BASE + PER_TRY_LEFT * left + Math.max(TIME_LIMIT_SECONDS - seconds, 0);
 }
 
 export interface Run {
