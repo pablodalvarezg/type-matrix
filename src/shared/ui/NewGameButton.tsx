@@ -3,12 +3,6 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
-/**
- * Starts a game of `mode` on the server and opens it: `/api/<mode>/games`,
- * then `/<mode>/<id>`. A `daily` one goes to `/api/daily/games` with the
- * local date, and its page is `/daily/<mode>/<puzzle>`. Either endpoint hands
- * back the game already open, if there is one.
- */
 /** YYYY-MM-DD in the browser's time zone, whatever its locale. */
 function localDate() {
   const now = new Date();
@@ -16,34 +10,62 @@ function localDate() {
   return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
 }
 
+/**
+ * The checked radios and checkboxes around the button, each name as a list:
+ * checkboxes repeat one.
+ */
+function optionsOf(button: HTMLElement) {
+  const fields: Record<string, string[]> = {};
+  const scope = button.closest("[data-game-options]");
+  for (const input of scope?.querySelectorAll<HTMLInputElement>(
+    "input:checked",
+  ) ?? []) {
+    (fields[input.name] ??= []).push(input.value);
+  }
+  return fields;
+}
+
+/**
+ * Starts a game of `mode` on the server and opens it: `/api/<mode>/games`,
+ * then `/<mode>/<id>`. The body is `body` plus what is checked in the
+ * `[data-game-options]` element the button sits in, if any: native radios
+ * and checkboxes choose the game, with no other client component. A `daily`
+ * one goes to `/api/daily/games` with the local date, and its page is
+ * `/daily/<mode>/<puzzle>`. Either endpoint hands back the game already
+ * open, if there is one.
+ */
 export function NewGameButton({
   mode,
   daily = false,
+  body,
   label,
 }: {
   mode: "hangman" | "guess";
   daily?: boolean;
+  body?: Record<string, unknown>;
   label: string;
 }) {
   const router = useRouter();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string>();
 
-  async function start() {
+  async function start(button: HTMLElement) {
     setPending(true);
     setError(undefined);
     const response = await fetch(`/api/${daily ? "daily" : mode}/games`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: daily ? JSON.stringify({ date: localDate(), mode }) : undefined,
+      body: JSON.stringify(
+        daily ? { date: localDate(), mode } : { ...optionsOf(button), ...body },
+      ),
     }).catch(() => null);
-    const body = await response?.json().catch(() => null);
-    if (!response?.ok || !body) {
+    const data = await response?.json().catch(() => null);
+    if (!response?.ok || !data) {
       setPending(false);
-      setError(body?.error ?? "Could not start a game. Try again.");
+      setError(data?.error ?? "Could not start a game. Try again.");
       return;
     }
-    const { id, puzzle } = body as { id: string; puzzle?: number };
+    const { id, puzzle } = data as { id: string; puzzle?: number };
     router.push(daily ? `/daily/${mode}/${puzzle}` : `/${mode}/${id}`);
   }
 
@@ -51,7 +73,7 @@ export function NewGameButton({
     <div className="flex flex-col gap-2">
       <button
         type="button"
-        onClick={start}
+        onClick={(event) => start(event.currentTarget)}
         disabled={pending}
         className="self-start border border-foreground bg-foreground px-4 py-2 font-bold text-background focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-foreground"
       >

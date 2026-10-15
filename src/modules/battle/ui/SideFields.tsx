@@ -5,7 +5,7 @@ import {
   type StatName,
 } from "@modules/battle/domain/stats";
 import { NumberField } from "@modules/battle/ui/NumberField";
-import { Pill } from "@modules/battle/ui/Pill";
+import { Pill } from "@shared/ui/Pill";
 import { Combobox } from "@shared/ui/Combobox";
 
 const STAT_LABELS: Record<StatName, string> = {

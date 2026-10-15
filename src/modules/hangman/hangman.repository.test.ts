@@ -4,7 +4,7 @@ import {
   addLetter,
   createGame,
   findGame,
-  findLatestGame,
+  findHistory,
   findWinners,
   giveUp,
 } from "@modules/hangman/hangman.repository";
@@ -19,7 +19,9 @@ const PLAYER = "9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d";
 describe("hangman repository", () => {
   it("returns the id of the game it creates", async () => {
     sql.mockResolvedValueOnce([{ id: GAME }]);
-    expect(await createGame(PLAYER, "pikachu")).toBe(GAME);
+    expect(
+      await createGame(PLAYER, "pikachu", { campaign: false, gens: [2] }),
+    ).toBe(GAME);
   });
 
   it("maps a stored game", async () => {
@@ -29,6 +31,8 @@ describe("hangman repository", () => {
         letters: "me",
         closes_at: null,
         given_up_at: null,
+        campaign: false,
+        gens: [1, 4],
       },
     ]);
     expect(await findGame(GAME, PLAYER)).toEqual({
@@ -36,7 +40,48 @@ describe("hangman repository", () => {
       letters: "me",
       closesAt: null,
       givenUp: false,
+      campaign: false,
+      gens: [1, 4],
     });
+  });
+
+  it("maps the history, with the seconds to win or null", async () => {
+    sql.mockResolvedValueOnce([
+      {
+        id: GAME,
+        species_slug: "mew",
+        letters: "mew",
+        closes_at: null,
+        given_up_at: null,
+        seconds: 41,
+      },
+      {
+        id: GAME,
+        species_slug: "mew",
+        letters: "a",
+        closes_at: null,
+        given_up_at: "2026-10-09T10:00:00Z",
+        seconds: null,
+      },
+    ]);
+    expect(await findHistory(PLAYER, true)).toEqual([
+      {
+        id: GAME,
+        speciesSlug: "mew",
+        letters: "mew",
+        closesAt: null,
+        givenUp: false,
+        seconds: 41,
+      },
+      {
+        id: GAME,
+        speciesSlug: "mew",
+        letters: "a",
+        closesAt: null,
+        givenUp: true,
+        seconds: null,
+      },
+    ]);
   });
 
   it("finds nothing for another player's game", async () => {
@@ -52,22 +97,6 @@ describe("hangman repository", () => {
   it("refuses the letter when the stored letters changed", async () => {
     sql.mockResolvedValueOnce([]);
     expect(await addLetter(GAME, PLAYER, "me", "r", false)).toBe(false);
-  });
-
-  it("maps the latest free-play game, given up", async () => {
-    sql.mockResolvedValueOnce([
-      {
-        id: GAME,
-        species_slug: "mew",
-        letters: "a",
-        closes_at: null,
-        given_up_at: "2026-10-09T10:00:00Z",
-      },
-    ]);
-    expect(await findLatestGame(PLAYER)).toMatchObject({
-      id: GAME,
-      givenUp: true,
-    });
   });
 
   it("gives up only when no letter landed first", async () => {

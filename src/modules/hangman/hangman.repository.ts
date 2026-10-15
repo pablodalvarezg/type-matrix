@@ -8,6 +8,13 @@ export interface GameRow {
   givenUp: boolean;
 }
 
+/** Campaign or free play. Daily games are neither: they have a puzzle. */
+export interface Kind {
+  campaign: boolean;
+  /** Free play only: the generations it draws from; null is every species. */
+  gens: number[] | null;
+}
+
 const closesAt = (value: unknown) => (value ? new Date(value as string) : null);
 
 type Row = Record<string, unknown>;
@@ -22,13 +29,14 @@ const gameRow = (row: Row): GameRow => ({
 export async function createGame(
   playerId: string,
   speciesSlug: string,
+  { campaign, gens }: Kind,
 ): Promise<string> {
   const [row] = await sql`
     WITH player AS (
       INSERT INTO players (id) VALUES (${playerId}) ON CONFLICT (id) DO NOTHING
     )
-    INSERT INTO hangman_games (player_id, species_slug)
-    VALUES (${playerId}, ${speciesSlug})
+    INSERT INTO hangman_games (player_id, species_slug, campaign, gens)
+    VALUES (${playerId}, ${speciesSlug}, ${campaign}, ${gens})
     RETURNING id`;
   return row!.id as string;
 }
@@ -37,26 +45,51 @@ export async function createGame(
 export async function findGame(
   id: string,
   playerId: string,
-): Promise<GameRow | undefined> {
+): Promise<(GameRow & Kind) | undefined> {
   const [row] = await sql`
-    SELECT species_slug, letters, closes_at, given_up_at FROM hangman_games
-    WHERE id = ${id} AND player_id = ${playerId}`;
-  return row && gameRow(row);
+    SELECT species_slug, letters, closes_at, given_up_at, campaign, gens
+    FROM hangman_games WHERE id = ${id} AND player_id = ${playerId}`;
+  return (
+    row && {
+      ...gameRow(row),
+      campaign: row.campaign as boolean,
+      gens: (row.gens as number[] | null) ?? null,
+    }
+  );
 }
 
+export type HistoryRow = GameRow & {
+  id: string;
+  /**
+   * Whole seconds from creation to the winning letter, by the database; null
+   * if not won. Seconds, not ms: these games never close, and a win 25 days
+   * on is more milliseconds than an int holds.
+   */
+  seconds: number | null;
+};
+
 /**
- * The player's latest free-play game. Only it can still be open: a new one
- * is made only once it is over.
+ * Every campaign or free-play game of the player, oldest first. The open
+ * game, campaign progress and the free-play streak all come from it.
+ * ponytail: the whole history on each read, a few thousand rows for a heavy
+ * player; keep running totals if it ever shows up in a profile.
  */
-export async function findLatestGame(
+export async function findHistory(
   playerId: string,
-): Promise<(GameRow & { id: string }) | undefined> {
-  const [row] = await sql`
-    SELECT id, species_slug, letters, closes_at, given_up_at
+  campaign: boolean,
+): Promise<HistoryRow[]> {
+  const rows = await sql`
+    SELECT id, species_slug, letters, closes_at, given_up_at,
+      floor(extract(epoch FROM won_at - created_at))::int AS seconds
     FROM hangman_games
     WHERE player_id = ${playerId} AND puzzle IS NULL
-    ORDER BY created_at DESC LIMIT 1`;
-  return row && { id: row.id as string, ...gameRow(row) };
+      AND campaign = ${campaign}
+    ORDER BY created_at, id`;
+  return rows.map((row) => ({
+    id: row.id as string,
+    ...gameRow(row),
+    seconds: (row.seconds as number | null) ?? null,
+  }));
 }
 
 /**

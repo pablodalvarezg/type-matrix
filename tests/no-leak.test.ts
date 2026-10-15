@@ -12,7 +12,7 @@ import { apart, shuffle } from "@modules/daily/domain/daily";
 import { POOL_V1 } from "@modules/daily/domain/pool";
 import { findSpecies, snapshot, type Species } from "@modules/dex";
 import { getGame as getStatsGame } from "@modules/guess";
-import { getGame } from "@modules/hangman";
+import { getGame, getOverview } from "@modules/hangman";
 import { MAX_WRONG } from "@modules/hangman/domain/hangman";
 
 /*
@@ -34,6 +34,8 @@ const games = vi.hoisted(
         puzzle?: number;
         closesAt: Date | null;
         givenUp: boolean;
+        campaign?: boolean;
+        gens?: number[] | null;
       }
     >(),
 );
@@ -95,8 +97,23 @@ const latest = vi.hoisted(
     },
 );
 
+// Campaign and free play are two modes on one table, as in the repository.
+const ofMode = vi.hoisted(
+  () => (playerId: string, campaign: boolean) =>
+    new Map(
+      [...games].filter(
+        ([, game]) =>
+          game.playerId === playerId && !!game.campaign === campaign,
+      ),
+    ),
+);
+
 vi.mock("@modules/hangman/hangman.repository", () => ({
-  createGame: async (playerId: string, speciesSlug: string) => {
+  createGame: async (
+    playerId: string,
+    speciesSlug: string,
+    kind: { campaign: boolean; gens: number[] | null },
+  ) => {
     const id = crypto.randomUUID();
     games.set(id, {
       playerId,
@@ -104,14 +121,21 @@ vi.mock("@modules/hangman/hangman.repository", () => ({
       letters: "",
       closesAt: null,
       givenUp: false,
+      ...kind,
     });
     return id;
   },
   findGame: async (id: string, playerId: string) => {
     const game = games.get(id);
-    return game?.playerId === playerId ? { ...game } : undefined;
+    return game?.playerId === playerId
+      ? { campaign: false, gens: null, ...game }
+      : undefined;
   },
-  findLatestGame: async (playerId: string) => latest(games, playerId),
+  // No clock here: every win scores as if it took no time at all.
+  findHistory: async (playerId: string, campaign: boolean) =>
+    [...ofMode(playerId, campaign)]
+      .filter(([, game]) => !game.puzzle)
+      .map(([id, game]) => ({ id, ...game, seconds: 0 })),
   addLetter: async (
     id: string,
     playerId: string,
@@ -285,6 +309,11 @@ function expectNoAnswer(responses: unknown[], species: Species) {
 
 const modes = {
   hangman: { start: startRoute, guess: guessRoute, view: getGame },
+  campaign: {
+    start: () => startRoute(post({ campaign: true })),
+    guess: guessRoute,
+    view: getGame,
+  },
   stats: {
     start: statsStartRoute,
     guess: statsGuessRoute,
@@ -573,6 +602,68 @@ describe("Giving up: the answer only once the player does", () => {
       game: { status: "lost", stopped: "gave-up" },
       streak: { current: 0 },
     });
+  });
+});
+
+// Mr. Mime is in Gen I, where a new player's campaign starts.
+describe("Hangman campaign: no answer before the game is over", () => {
+  it.each([
+    ["mr-mime", "won"],
+    ["mr-mime", "lost"],
+  ] as const)("%s, %s", async (slug, outcome) => {
+    const { species, responses } = await play(
+      "campaign",
+      slug,
+      letters(outcome),
+    );
+    expect(responses.at(-1)).toMatchObject({
+      status: outcome,
+      answer: species.name,
+    });
+    expectNoAnswer(responses.slice(0, -1), species);
+  });
+});
+
+describe("Hangman modes", () => {
+  it("refuses free play limited to a generation the campaign has not finished", async () => {
+    jar.clear();
+    const response = await startRoute(post({ gen: ["1"] }));
+    expect(response.status).toBe(403);
+    expect(jar.size).toBe(0);
+  });
+
+  it("keeps one open game per mode: campaign and free play apart", async () => {
+    jar.clear();
+    pick.index = 0;
+    const free = (await (await startRoute(post())).json()) as { id: string };
+    const campaign = (await (
+      await startRoute(post({ campaign: true }))
+    ).json()) as { id: string };
+    expect(campaign.id).not.toBe(free.id);
+    const again = (await (await startRoute(post())).json()) as { id: string };
+    expect(again.id).toBe(free.id);
+  });
+
+  it("counts a game that lost a race between two starts as lost", async () => {
+    jar.clear();
+    const playerId = crypto.randomUUID();
+    const game = (letters: string) => ({
+      playerId,
+      speciesSlug: "mew",
+      letters,
+      closesAt: null,
+      givenUp: false,
+      campaign: true,
+    });
+    // In created order: a win, a game left open behind a newer one, the open one.
+    games.set(crypto.randomUUID(), game("mew"));
+    games.set(crypto.randomUUID(), game(""));
+    const open = crypto.randomUUID();
+    games.set(open, game(""));
+
+    const overview = await getOverview(playerId);
+    expect(overview.campaign.wins).toBe(0);
+    expect(overview.open.campaign).toBe(open);
   });
 });
 
