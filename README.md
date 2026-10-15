@@ -14,7 +14,7 @@ Side project #2 of [Pablo Álvarez Graña's portfolio](https://github.com/pablod
 |---|---|---|
 | **Battle calculator** | Picks attacker, defender, move, level, IVs, EVs and nature, and gets the damage range and the percentage of the defender's HP | No answer. Pure calculation |
 | **Team builder** | Builds a team of 6 and sees shared weaknesses and offensive coverage | No answer. Pure calculation |
-| **Hangman** | Guesses a species name letter by letter, while the gallows fills in | Server only |
+| **Hangman** | Guesses a species name letter by letter, while the gallows fills in: a campaign that unlocks the generations one by one, or free play with a scored streak | Server only |
 | **Stats & types** | Guesses a species from feedback on its types and base stats, Wordle-style | Server only |
 | **Daily puzzle** | A Stats & types round and a Hangman round per day, each with its own species, the same for everyone, each with its own streak and leaderboard | Server only |
 
@@ -163,10 +163,10 @@ src/
 │  ├─ (modes)/calculator, team, hangman, guess, daily
 │  └─ api/<mode>/.../route.ts    # Thin: parse with the schema, call the service, map errors to HTTP
 ├─ modules/
-│  ├─ dex/                       # Snapshot loader (server-only), species/move/type types, type chart
+│  ├─ dex/                       # Snapshot loader (server-only), species/move/type types, type chart, generations
 │  ├─ battle/                    # Stats and damage. Pure domain, the most heavily tested code in the repo
 │  ├─ team/                      # Weaknesses and coverage. Pure domain
-│  ├─ hangman/                   # Name normalisation and masking (domain), game service, repository
+│  ├─ hangman/                   # Masking, campaign progress and streak points (domain), game service, repository
 │  ├─ guess/                     # Stats & types feedback (domain), game service, repository
 │  ├─ daily/                     # Puzzle number, timezone window, seeded selection, streaks, leaderboard
 │  └─ players/                   # Cookie identity, nickname
@@ -192,10 +192,12 @@ This tree is **where things go, not what has to exist on day one**. A module is 
 Names like `Mr. Mime`, `Farfetch'd`, `Type: Null`, `Nidoran♀` and `Flabébé`. Letters are compared with accents folded (`é` → `e`), and anything that is not a letter (spaces, dots, apostrophes, symbols) is revealed from the start. The word's length and shape are public; its letters are not.
 
 - The answer is any of the 1025 species in the snapshot. Six misses end the game, and each one adds a part to the gallows drawing (decoration: the misses are also said in words).
+- **Two modes, campaign and free play** ([ADR 0009](docs/adr/0009-hangman-campaign-and-free-play-streak.md)). The campaign plays one generation at a time from Gen I: ten wins finish it, each loss takes one back (never below zero), and a finished generation stays finished. Free play draws from every species; it can be limited to one generation the campaign has finished, and to any set of them once the campaign is done. The server checks the choice.
+- **Free-play streak.** A win scores `100 + 20 × misses left + 1 point per second under 180`, timed by the database from the game's creation to the winning letter. A loss or a give-up ends the streak. Only the player sees their current and best streak. Both the campaign and the streak are derived from the games, never stored.
 - A game belongs to the player who started it: starting one issues the player cookie, and with any other cookie the game is a 404.
-- **One free-play game at a time.** Starting a game hands back the one already open, and `/hangman` offers "Continue" instead of "New game", so leaving the board never loses it. **Give up** ends it as lost and shows the answer; then a new game can start.
+- **One game at a time per mode** (campaign and free play apart). Starting a game hands back the one already open, and `/hangman` offers "Continue" instead of a new one, so leaving the board never loses it. **Give up** ends it as lost and shows the answer; then a new game can start.
 - A repeated letter is refused and costs nothing. Two guesses sent at once cannot both count: the second is refused, so the miss cap holds. A give-up and a guess cannot both land either: each checks that nothing changed since it read the game.
-- The API is `POST /api/hangman/games`, `POST /api/hangman/games/{id}/guesses` with `{ "letter": "a" }`, and `POST /api/hangman/games/{id}/give-up`. Each response is the public view of the game: the mask, the letters tried, the misses left and the status, plus the answer once it is over.
+- The API is `POST /api/hangman/games` with `{}` for free play over every species, `{ "gen": ["3"] }` to limit it, or `{ "campaign": true }`, then `POST /api/hangman/games/{id}/guesses` with `{ "letter": "a" }`, and `POST /api/hangman/games/{id}/give-up`. Each response is the public view of the game: the mask, the letters tried, the misses left and the status, plus the answer once it is over.
 
 ### Stats & types, feedback per guess
 
@@ -281,7 +283,11 @@ Each step ends green. There is one deploy, at close-out, once every mode exists.
 7. **Stats & types, free play.** Same engine, same test.
 8. **Daily puzzle and streaks.** Puzzle number, timezone window, seeded selection, streaks derived from results. Tests: determinism, different secret → different answer, window boundaries, gap breaks the streak.
 9. **Leaderboard.**
-10. **Close-out.** Deploy to Vercel with the four environment variables, Playwright smoke (one test per mode), Lighthouse ≥ 90 on mobile, responsive from 360 px, public README with screenshots, and **measured numbers** for the case study.
+10. **Close-out.** Playwright smoke (one test per mode), responsive from 360 px.
+11. **Hangman campaign and free-play streak.** Generations unlocked by wins, free play limited to unlocked generations, a scored streak.
+12. **Battler.** A six-pick draft (easy, hard and a secret Nuzlocke) and an eight-team bracket, simulated with the exact damage formula.
+13. **Dex Clues.** Stats & types reworked: ten guesses, types, generation, evolution stage, color, height and weight per guess, and hints unlocked by misses. Its daily round stays.
+14. **Deploy.** Vercel with the four environment variables, Lighthouse ≥ 90 on mobile, public README with screenshots, and **measured numbers** for the case study.
 
 ### Pending decisions, with a default
 

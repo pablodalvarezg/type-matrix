@@ -1,6 +1,6 @@
 import Form from "next/form";
 
-import { Pill } from "@modules/battle/ui/Pill";
+import { Pill } from "@shared/ui/Pill";
 import { SideFields } from "@modules/battle/ui/SideFields";
 import { Combobox } from "@shared/ui/Combobox";
 

@@ -60,6 +60,21 @@ test("hangman: a game played to the end", async ({ page }) => {
   await page.waitForURL(/\/hangman\/[\w-]+$/);
   await spellOut(page);
   await expect(page.getByRole("button", { name: "Play again" })).toBeVisible();
+  await expect(
+    page.getByText(/^\d+ points \(\d+ wins?\)$/).first(),
+  ).toBeVisible();
+});
+
+test("hangman campaign: a Gen I game, then the next one", async ({ page }) => {
+  await page.goto("/hangman");
+  await page.getByRole("button", { name: "Play Gen I" }).click();
+  await page.waitForURL(/\/hangman\/[\w-]+$/);
+  await expect(
+    page.getByRole("heading", { name: "Hangman campaign" }),
+  ).toBeVisible();
+  await spellOut(page);
+  await expect(page.getByText(/^Gen I: \d+ of 10 wins\.$/)).toBeVisible();
+  await expect(page.getByRole("button", { name: "Play Gen I" })).toBeVisible();
 });
 
 test("stats & types: resumed from the breadcrumb, then given up", async ({

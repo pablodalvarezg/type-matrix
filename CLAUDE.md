@@ -102,18 +102,18 @@ src/
 │  ├─ page.tsx                 # home: los cinco modos, cada tarjeta entera es el link; la del diario, con rachas y cuenta regresiva
 │  ├─ (modes)/calculator/      # page.tsx: lee searchParams, llama al service
 │  ├─ (modes)/team/            # page.tsx: la misma forma
-│  ├─ (modes)/hangman/         # page.tsx: "Continue" si hay una abierta, si no partida nueva · [id]/page.tsx: el tablero
+│  ├─ (modes)/hangman/         # page.tsx: campaña y free play, cada uno con "Continue" si hay una abierta, si no partida nueva · [id]/page.tsx: el tablero, y al terminar el progreso o la racha
 │  ├─ (modes)/guess/           # Stats & types, la misma forma que hangman
 │  ├─ (modes)/daily/           # page.tsx: las dos rondas, cada una con su botón · guess/[n] y hangman/[n]: el tablero, la racha y el leaderboard
 │  ├─ api/players/nickname/    # route.ts: POST, emite la cookie y guarda el nickname
-│  ├─ api/hangman/games/       # route.ts: POST crea la partida o devuelve la abierta · [id]/guesses: POST una letra · [id]/give-up: POST
+│  ├─ api/hangman/games/       # route.ts: POST `{ campaign, gen }` crea la partida o devuelve la abierta de ese modo · [id]/guesses: POST una letra · [id]/give-up: POST
 │  ├─ api/guess/games/         # la misma forma; el intento es `{ species }`, nombre o slug
 │  ├─ api/daily/games/         # route.ts: POST `{ date, mode }`, crea o devuelve la del día; intentos y give-up van a la API del modo
 │  └─ globals.css              # los tokens del tema, claro y oscuro
 ├─ modules/
 │  ├─ battle/                  # stats y daño
 │  │  ├─ domain/               # stats.ts · damage.ts, con los vectores del oráculo
-│  │  ├─ ui/                   # CalculatorForm · SideFields · DamageResult · Pill · NumberField
+│  │  ├─ ui/                   # CalculatorForm · SideFields · DamageResult · NumberField
 │  │  ├─ battle.schema.ts      # Zod de los search params del formulario
 │  │  ├─ battle.service.ts     # busca en dex, STAB, efectividad, llama al domain
 │  │  └─ index.ts
@@ -124,7 +124,7 @@ src/
 │  │  ├─ daily.service.ts      # un "round" por modo: elige la especie (hangman evita la de guess del día), valida la fecha, rachas, leaderboard, getStreaks para la home
 │  │  └─ index.ts
 │  ├─ dex/                     # especies, movimientos, tabla de tipos
-│  │  ├─ domain/               # dex.ts (tipos) · effectiveness.ts
+│  │  ├─ domain/               # dex.ts (tipos) · effectiveness.ts · generations.ts: generación por número de Pokédex nacional
 │  │  ├─ data/                 # snapshot.repository.ts (server-only), findSpecies/findMove
 │  │  ├─ dex.schema.ts         # Zod del snapshot, se parsea al cargar
 │  │  └─ index.ts
@@ -135,12 +135,12 @@ src/
 │  │  ├─ guess.repository.ts   # como el de hangman: `guesses text[]`, concurrencia por cantidad; `puzzle` y `closes_at` en las diarias; `won_at` por el reloj de la base; `given_up_at`; la última de free play; el leaderboard de un puzzle
 │  │  ├─ guess.service.ts      # una partida abierta a la vez, resuelve el nombre, rendirse, devuelve la vista pública
 │  │  └─ index.ts
-│  ├─ hangman/                 # ahorcado, free play y las partidas del diario
-│  │  ├─ domain/               # hangman.ts: máscara con acentos plegados, fallos, estado, `stopped`, respuesta al terminar
-│  │  ├─ ui/                   # HangmanBoard (cliente); lo que va al terminar llega por `children` · Gallows: una parte por fallo
-│  │  ├─ hangman.schema.ts     # una letra a–z · el id de partida
-│  │  ├─ hangman.repository.ts # crear (y el jugador), buscar, la última de free play, letra y give-up con concurrencia optimista, diarias, ganadores
-│  │  ├─ hangman.service.ts    # una partida abierta a la vez, reglas, rendirse, fallos del leaderboard, vista pública
+│  ├─ hangman/                 # ahorcado: campaña, free play y las partidas del diario
+│  │  ├─ domain/               # hangman.ts: máscara con acentos plegados, fallos, estado, `stopped`, respuesta al terminar · campaign.ts: progreso por generación, canPick · score.ts: puntos y rachas de free play
+│  │  ├─ ui/                   # HangmanBoard (cliente); lo que va al terminar llega por `children` · Gallows: una parte por fallo · CampaignProgress · CampaignButton · StreakSummary · FreePlayForm (radios y casillas nativos que manda NewGameButton)
+│  │  ├─ hangman.schema.ts     # una letra a–z · `{ campaign, gen }` al crear · el id de partida
+│  │  ├─ hangman.repository.ts # crear (y el jugador) con `campaign` y `gens`, buscar, el historial de un modo (segundos hasta ganar), letra y give-up con concurrencia optimista, diarias, ganadores
+│  │  ├─ hangman.service.ts    # una partida abierta por modo (la última del historial; una anterior sin terminar cuenta como perdida), reglas, valida generaciones, progreso y rachas derivados, rendirse, fallos del leaderboard, vista pública
 │  │  └─ index.ts
 │  ├─ players/                 # identidad por cookie firmada, nickname
 │  │  ├─ domain/               # player-cookie.ts: firma y verifica `<id>.<hmac>`
@@ -159,7 +159,7 @@ src/
    ├─ config/                  # env.ts (Zod, server-only) · env-schema.ts (puro)
    ├─ db/                      # client.ts: neon() sobre HTTP (server-only) · rate-limit.ts: hit() por clave y hora
    ├─ http/                    # require-json.ts: el 415 de toda ruta que emite la cookie · throttle.ts: el 429 por IP
-   ├─ ui/                      # Combobox · NewGameButton (cliente) · ContinueLink (server)
+   ├─ ui/                      # Combobox · NewGameButton (cliente; manda lo marcado en su `[data-game-options]`) · ContinueLink (server) · Pill (radio o casilla nativa)
    ├─ game.ts                  # lo que comparten los modos: stopOf (cerrado o rendido) · serverAhead (cuándo un tablero toma la partida del servidor)
    └─ search-params.ts         # SearchParams · param(), de los formularios GET
 data/snapshot.json             # generado por scripts/ingest.ts, commiteado
@@ -377,7 +377,7 @@ Reglas que no se negocian, porque son la tesis:
   | `src/shared/ui/Combobox.tsx` | Lista de sugerencias estilada (un `<datalist>` no se puede estilar) y teclado ARIA. Es un input con nombre dentro del formulario: sin JS, se envía lo escrito |
   | `src/modules/hangman/ui/HangmanBoard.tsx` | Cada letra es un `POST` JSON y la respuesta reemplaza la partida. Es la excepción a "`ui` nunca busca datos": manda un intento, no lee datos, y solo tiene lo que el servidor devolvió. Sin JS no se juega (decidido por Pablo el 2026-10-07) |
   | `src/modules/guess/ui/GuessBoard.tsx` | La misma excepción que `HangmanBoard`: cada especie es un `POST` JSON. Lleva el `Combobox` con los 1025 nombres, que son el espacio de búsqueda |
-  | `src/shared/ui/NewGameButton.tsx` | `POST` que crea la partida de un modo y navega a su id. La misma excepción, compartida por los tres modos. El diario manda la fecha local del navegador, que solo el cliente conoce, y navega al número de puzzle |
+  | `src/shared/ui/NewGameButton.tsx` | `POST` que crea la partida de un modo y navega a su id. La misma excepción, compartida por los tres modos. El diario manda la fecha local del navegador, que solo el cliente conoce, y navega al número de puzzle. Fuera del diario, manda lo marcado en el `[data-game-options]` que lo contiene (las generaciones del free play), así que esa elección no necesita otro componente cliente. No es un `<form>`: sin handler de submit, se podría enviar como GET |
   | `src/modules/players/ui/NicknameForm.tsx` | `POST` del nickname y `router.refresh()`, para que el servidor dibuje la fila nueva del leaderboard. La misma excepción que los tableros: manda un dato, no lee datos |
 | `src/modules/daily/ui/Countdown.tsx` | El tiempo hasta la medianoche local, que solo el navegador conoce, y un intervalo que lo actualiza. En el servidor no muestra nada, para no desentonar con la hidratación |
 
@@ -438,6 +438,9 @@ Reglas que no se negocian, porque son la tesis:
   la respuesta, el give-up sí, y después no se aceptan intentos ni otro
   give-up. Verificado que muerde: con la respuesta siempre en la vista del
   ahorcado, fallan sus ocho casos, los del diario y los de rendirse incluidos.
+  La campaña del ahorcado juega Mr. Mime (Gen I, donde arranca un jugador
+  nuevo) ganando y perdiendo. Un free play limitado a una generación que la
+  campaña no completó da 403 (verificado que muerde: sin `canPick`, falla).
 - **Smoke e2e** (Playwright, `tests/e2e/smoke.e2e.ts`): uno por modo más la
   home, jugando las partidas hasta el final sin saber la respuesta. Corre a
   360 px y después de cada test comprueba que la página no tiene scroll
@@ -545,7 +548,7 @@ Trabajá solo en el paso actual. No adelantes el siguiente.
       con nickname; un ganador sin nickname ve el form para elegirlo. Se ve al
       terminar la partida, en `/daily/guess/[n]`: top 10 y la fila propia si queda
       más abajo (decidido por Pablo el 2026-10-09).
-- [ ] **10. Cierre** ← en curso.
+- [x] **10. Cierre.**
       - [x] Throttle por IP y hora de las cuatro rutas que agregan filas
             (`rate_limits`, ADR 0006): 10 nicknames y 60 partidas.
       - [x] Smoke de Playwright por modo a 360 px, `.gitattributes`, ADRs 0001–0006.
@@ -556,6 +559,34 @@ Trabajá solo en el paso actual. No adelantes el siguiente.
             el diario, donde cuenta como derrota); el ahorcado diario, con su
             propia especie, racha y leaderboard por fallos; rachas y cuenta
             regresiva a la medianoche local en la tarjeta del diario.
+      - [x] Combobox en iPhone (#11): el resaltado de la opción solo con un
+            mouse real. iOS Safari tomaba el cambio en `mousemove` como hover
+            y descartaba el tap.
+
+Alcance nuevo, decidido por Pablo el 2026-10-13 y el 2026-10-14. El deploy
+pasa al final, después del paso 13.
+
+- [ ] **11. Campaña y racha del ahorcado** ← en curso (ADR 0009). Campaña por
+      generaciones desde Gen I: 10 victorias completan una, cada derrota resta
+      una (sin bajar de 0) y una generación completada no se pierde. Free play
+      aleatorio sobre todas; limitable a una generación completada, y a
+      cualquier combinación al terminar la campaña. Racha de free play con
+      puntos (`100 + 20 × fallos que sobran + 1 por segundo bajo 180`), solo
+      para el jugador.
+- [ ] **12. Battler.** Draft de 6 elecciones: fácil (6 ofertas, 6 rerolls),
+      difícil (3 y 3) y Nuzlocke secreto (se desbloquea ganando un torneo en
+      difícil: 3 ofertas, sin rerolls, solo especies que no evolucionan con
+      450 o más de stats base, y la que cae KO queda muerta para el resto del
+      bracket). Bracket de 8, simulación propia con la fórmula exacta y las
+      seis stats, sin habilidades, ítems ni estados. La ingesta suma cadenas
+      de evolución, color, altura y peso, para este paso y el siguiente.
+- [ ] **13. Dex Clues.** Stats & types rehecho: 10 intentos; por intento,
+      tipos ✓/✗, generación, etapa, altura y peso con flecha, y color ✓/✗;
+      pistas tras el fallo 3 (generación), 6 (tipado) y 9 (primera letra y
+      largo); una tarjeta por intento en mobile; racha de free play con
+      `100 + 20 × intentos que sobran + 1 por segundo bajo 180`. La ronda
+      diaria sigue, con el modo nuevo.
+- [ ] **14. Deploy.**
       - [ ] **Pablo:** deploy en Vercel con las cuatro variables, `LAUNCH_DATE`
             = día del deploy, `db:migrate` contra la base de producción,
             Lighthouse mobile sobre la URL y capturas.

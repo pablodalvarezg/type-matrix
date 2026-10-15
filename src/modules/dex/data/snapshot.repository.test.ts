@@ -7,6 +7,7 @@ import {
 } from "@modules/dex/data/snapshot.repository";
 import type { TypeName } from "@modules/dex/domain/dex";
 import { effectiveness } from "@modules/dex/domain/effectiveness";
+import { generationOf } from "@modules/dex/domain/generations";
 
 /*
  * Checks the committed snapshot against facts of the games, not against the
@@ -89,6 +90,24 @@ describe("species", () => {
     expect(bySlug("pikachu")?.moves).toContain("thunderbolt");
     expect(bySlug("charizard")?.moves).toContain("flamethrower");
     expect(bySlug("charizard")?.moves).not.toContain("surf");
+  });
+});
+
+describe("generations", () => {
+  it.each([
+    ["mew", 1],
+    ["chikorita", 2],
+    ["treecko", 3],
+    ["arceus", 4],
+    ["victini", 5],
+    ["chespin", 6],
+    ["rowlet", 7],
+    ["meltan", 7],
+    ["grookey", 8],
+    ["sprigatito", 9],
+    ["pecharunt", 9],
+  ])("puts %s in generation %i", (slug, gen) => {
+    expect(generationOf(findSpecies(slug)!.id)).toBe(gen);
   });
 });
 

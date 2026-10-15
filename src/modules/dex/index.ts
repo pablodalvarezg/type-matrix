@@ -10,6 +10,11 @@ export {
 } from "@modules/dex/domain/dex";
 export { effectiveness } from "@modules/dex/domain/effectiveness";
 export {
+  GENERATION_NAMES,
+  GENERATIONS,
+  generationOf,
+} from "@modules/dex/domain/generations";
+export {
   findMove,
   findSpecies,
   snapshot,
