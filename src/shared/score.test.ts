@@ -1,18 +1,18 @@
 import { describe, expect, it } from "vitest";
 
-import { points, streaks } from "@modules/hangman/domain/score";
+import { points, streaks } from "@shared/score";
 
 describe("points", () => {
-  it("adds 20 per miss left and a point per second under 180", () => {
-    expect(points(0, 30)).toBe(100 + 120 + 150);
-    expect(points(2, 60)).toBe(100 + 80 + 120);
+  it("adds 20 per try left and a point per second under 180", () => {
+    expect(points(6, 30)).toBe(100 + 120 + 150);
+    expect(points(4, 60)).toBe(100 + 80 + 120);
   });
 
   it("gives nothing for time past the limit", () => {
-    expect(points(5, 179)).toBe(100 + 20 + 1);
-    expect(points(5, 180)).toBe(120);
+    expect(points(1, 179)).toBe(100 + 20 + 1);
+    expect(points(1, 180)).toBe(120);
     // A game left open for a month.
-    expect(points(5, 2_600_000)).toBe(120);
+    expect(points(1, 2_600_000)).toBe(120);
   });
 });
 

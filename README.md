@@ -15,12 +15,12 @@ Side project #2 of [Pablo Álvarez Graña's portfolio](https://github.com/pablod
 | **Battle calculator** | Picks attacker, defender, move, level, IVs, EVs and nature, and gets the damage range and the percentage of the defender's HP | No answer. Pure calculation |
 | **Team builder** | Builds a team of 6 and sees shared weaknesses and offensive coverage | No answer. Pure calculation |
 | **Hangman** | Guesses a species name letter by letter, while the gallows fills in: a campaign that unlocks the generations one by one, or free play with a scored streak | Server only |
-| **Stats & types** | Guesses a species from feedback on its types and base stats, Wordle-style | Server only |
-| **Daily puzzle** | A Stats & types round and a Hangman round per day, each with its own species, the same for everyone, each with its own streak and leaderboard | Server only |
+| **Dex Clues** | Guesses a species from feedback on its types, generation, evolution stage, color, height and weight, Wordle-style, with hints unlocked by misses and a scored free-play streak | Server only |
+| **Daily puzzle** | A Dex Clues round and a Hangman round per day, each with its own species, the same for everyone, each with its own streak and leaderboard | Server only |
 
 ### Why there is no silhouette mode
 
-The original idea was a silhouette that un-pixelates with each miss. That needs official art, and the project uses none. **Stats & types** replaces it: you guess the species from its numbers instead of its shape. It is harder, it says more about the data, and it carries no legal risk.
+The original idea was a silhouette that un-pixelates with each miss. That needs official art, and the project uses none. **Dex Clues** replaces it: you guess the species from its dex entry instead of its shape. It says more about the data, and it carries no legal risk.
 
 ---
 
@@ -51,7 +51,7 @@ answer(n) = shuffle(POOL, seed = HMAC(DAILY_SECRET, roundVersion))[n mod POOL.le
 - `n` is the puzzle number: days since launch, plus one.
 - **The repo is public**, so a seed derived from the date alone would let anyone compute tomorrow's answer from the source code. The server-side `DAILY_SECRET` is what prevents that.
 - Shuffling the pool once (instead of hashing each day) means no repeats until the pool cycles.
-- Each round has its own shuffle (`"v1"` for Stats & types, `"hangman-v1"` for Hangman). The Hangman order is then kept apart from the Stats & types one: wherever both hold the same species, it swaps with the next position. It is still a shuffle of the whole pool, so no repeats within a cycle, and the two rounds never share a day's species: solving one would give the other away.
+- Each round has its own shuffle (`"v1"` for Dex Clues, `"hangman-v1"` for Hangman). The Hangman order is then kept apart from the Dex Clues one: wherever both hold the same species, it swaps with the next position. It is still a shuffle of the whole pool, so no repeats within a cycle, and the two rounds never share a day's species: solving one would give the other away.
 - **`POOL` and `DAILY_SECRET` are frozen.** Changing either one rewrites every past puzzle. If the pool ever has to change, it becomes a new pool version that takes effect from a given puzzle number, and older numbers keep resolving against the old version.
 
 No scheduler: the puzzle is computed, not published.
@@ -63,7 +63,7 @@ No scheduler: the puzzle is computed, not published.
 - The client sends its local date. The server turns it into a puzzle number and **accepts it only if that date is "today" somewhere on Earth** (UTC−12 to UTC+14). That window holds at most two or three puzzle numbers at any moment.
 - One game per player per puzzle, enforced with a unique constraint, not with application code.
 - **A streak counts consecutive puzzle numbers won**, not calendar days, one per round. A loss, a give-up or a missed puzzle resets it. It is derived from the results table, never stored as a counter that can drift.
-- Leaderboard per puzzle and round: fewest guesses (Stats & types) or fewest misses (Hangman) first, then shortest **server-measured** time (from game creation to the winning guess). The client's clock is never trusted. Every winner of a Hangman puzzle found the same letters, so fewest letters tried is fewest misses: no extra column.
+- Leaderboard per puzzle and round: fewest guesses (Dex Clues) or fewest misses (Hangman) first, then shortest **server-measured** time (from game creation to the winning guess). The client's clock is never trusted. Every winner of a Hangman puzzle found the same letters, so fewest letters tried is fewest misses: no extra column.
 - The home page shows the player's current streaks and, like the daily page, the time left until their local midnight, when the next puzzle opens. Only the browser knows that midnight, so the countdown is rendered there.
 - Only players with a nickname are listed; a winner without one is offered the form. The board shows once your game is over: the top 10, and your own row if it falls lower.
 
@@ -126,7 +126,7 @@ Everything has to run on free plans. The accepted cost ceiling for the whole por
 
 PokéAPI asks consumers to cache. The strongest cache is not calling it in production at all.
 
-- `scripts/ingest.ts` downloads what is needed once — species (id, English name, types, base stats, and the damaging moves each one can learn), moves (name, type, category, power) and the type chart — with limited concurrency to be polite. Each species gets the learnset of the most recent mainline game it appears in: Scarlet/Violet first, older games only for species that game left out.
+- `scripts/ingest.ts` downloads what is needed once — species (id, English name, types, base stats, the damaging moves each one can learn, color, height, weight and the species it evolves from), moves (name, type, category, power) and the type chart — with limited concurrency to be polite. Each species gets the learnset of the most recent mainline game it appears in: Scarlet/Violet first, older games only for species that game left out.
 - It writes `data/snapshot.json`, which is committed. The app reads only that file, and only on the server.
 - Re-running the ingest is a manual decision, and the diff shows exactly what changed.
 - **No sprites are downloaded.** Not even to process them.
@@ -163,15 +163,17 @@ src/
 │  ├─ (modes)/calculator, team, hangman, guess, daily
 │  └─ api/<mode>/.../route.ts    # Thin: parse with the schema, call the service, map errors to HTTP
 ├─ modules/
-│  ├─ dex/                       # Snapshot loader (server-only), species/move/type types, type chart, generations
+│  ├─ dex/                       # Snapshot loader (server-only), species/move/type types, type chart, generations, evolution stages
 │  ├─ battle/                    # Stats and damage. Pure domain, the most heavily tested code in the repo
 │  ├─ team/                      # Weaknesses and coverage. Pure domain
-│  ├─ hangman/                   # Masking, campaign progress and streak points (domain), game service, repository
-│  ├─ guess/                     # Stats & types feedback (domain), game service, repository
+│  ├─ hangman/                   # Masking and campaign progress (domain), game service, repository
+│  ├─ guess/                     # Dex Clues feedback and hints (domain), game service, repository
 │  ├─ daily/                     # Puzzle number, timezone window, seeded selection, streaks, leaderboard
 │  └─ players/                   # Cookie identity, nickname
 └─ shared/
    ├─ ui/                        # Design-system primitives
+   ├─ score.ts                   # Free-play points and streaks, shared by Hangman and Dex Clues
+   ├─ name-shape.ts              # "2 + 4 letters, with a space", said the same in both modes
    ├─ db/                        # Neon client, rate-limit counter
    ├─ http/                      # JSON-only guard and throttle of the routes that add rows
    └─ config/                    # env.ts
@@ -189,7 +191,7 @@ This tree is **where things go, not what has to exist on day one**. A module is 
 
 ### Hangman, details that are easy to miss
 
-Names like `Mr. Mime`, `Farfetch'd`, `Type: Null`, `Nidoran♀` and `Flabébé`. Letters are compared with accents folded (`é` → `e`), and anything that is not a letter (spaces, dots, apostrophes, symbols) is revealed from the start. The word's length and shape are public; its letters are not.
+Names like `Mr. Mime`, `Farfetch'd`, `Type: Null`, `Nidoran♀` and `Flabébé`. Letters are compared with accents folded (`é` → `e`), and anything that is not a letter (spaces, dots, apostrophes, symbols) is revealed from the start. The word's length and shape are public; its letters are not. Under the mask, the shape is also said in words, letters per part: `Mr. Mime` is "2 + 4 letters, with a space", since a gap in a row of blanks is easy to miss.
 
 - The answer is any of the 1025 species in the snapshot. Six misses end the game, and each one adds a part to the gallows drawing (decoration: the misses are also said in words).
 - **Two modes, campaign and free play** ([ADR 0009](docs/adr/0009-hangman-campaign-and-free-play-streak.md)). The campaign plays one generation at a time from Gen I: ten wins finish it, each loss takes one back (never below zero), and a finished generation stays finished. Free play draws from every species; it can be limited to one generation the campaign has finished, and to any set of them once the campaign is done. The server checks the choice.
@@ -199,15 +201,18 @@ Names like `Mr. Mime`, `Farfetch'd`, `Type: Null`, `Nidoran♀` and `Flabébé`.
 - A repeated letter is refused and costs nothing. Two guesses sent at once cannot both count: the second is refused, so the miss cap holds. A give-up and a guess cannot both land either: each checks that nothing changed since it read the game.
 - The API is `POST /api/hangman/games` with `{}` for free play over every species, `{ "gen": ["3"] }` to limit it, or `{ "campaign": true }`, then `POST /api/hangman/games/{id}/guesses` with `{ "letter": "a" }`, and `POST /api/hangman/games/{id}/give-up`. Each response is the public view of the game: the mask, the letters tried, the misses left and the status, plus the answer once it is over.
 
-### Stats & types, feedback per guess
+### Dex Clues, feedback per guess
 
-For each guessed species the server returns: types (exact match, partial match, none), and each base stat (higher, lower, equal). Guesses are capped per game. The list of species names for autocomplete can travel to the client: it is the guess space, not the answer.
+The mode was Stats & types until step 12 ([ADR 0010](docs/adr/0010-dex-clues.md)); its routes, module and table keep the name `guess`. For each guessed species the server returns how it compares with the answer, and the hints the misses so far have unlocked. Guesses are capped per game. The list of species names for autocomplete can travel to the client: it is the guess space, not the answer.
 
-- The answer is any of the 1025 species in the snapshot. Eight guesses per game.
-- Each type of a guess gets its own mark: ✓ if the answer has it, ✗ if not, plus **=** when the guess's types are exactly the answer's (any order). A mono-type ✓ without = means the answer has a second type. Each of the six base stats gets an arrow: the answer's is higher, lower or equal.
+- The answer is any of the 1025 species in the snapshot. Ten guesses per game.
+- Each type of a guess gets its own mark: ✓ if the answer has it, ✗ if not, plus **=** when the guess's types are exactly the answer's (any order). A mono-type ✓ without = means the answer has a second type. The Pokédex color gets ✓ or ✗. Generation, evolution stage, height and weight each get an arrow: the answer's is higher, lower or equal.
+- Height is shown in metres with two decimals and weight in kilograms with one: PokéAPI gives decimetres and hectograms, so both are exact. The evolution stage is 1 for a species that evolves from nothing and one more than its pre-evolution otherwise (Pichu 1, Pikachu 2, Raichu 3).
+- **Hints, unlocked by misses:** the generation after 3, the full typing after 6, and after 9, for the last guess, the first letter and the name's shape: letters only, counted per part, so `Mr. Mime` reads "2 + 4 letters, with a space" and `Chi-Yu` "3 + 2 letters, with a hyphen". A plain total would hide that the name has two parts.
+- **Free-play streak**, as in Hangman: a win scores `100 + 20 × guesses left + 1 point per second under 180`, and a loss or a give-up ends the streak. The daily round keeps its own streak and leaderboard.
 - A species already guessed, or a name that is not a species, is refused and costs nothing. Ownership, concurrent guesses, one open game at a time and giving up work as in Hangman.
-- Once the game is over, the answer comes back in full: name, types and base stats.
-- The API is `POST /api/guess/games`, `POST /api/guess/games/{id}/guesses` with `{ "species": "Mr. Mime" }` (a name or slug), and `POST /api/guess/games/{id}/give-up`. Each response is the public view of the game: one row per guess with its feedback, the guesses left and the status, plus the answer once it is over.
+- Once the game is over, the answer comes back in full.
+- The API is `POST /api/guess/games`, `POST /api/guess/games/{id}/guesses` with `{ "species": "Mr. Mime" }` (a name or slug), and `POST /api/guess/games/{id}/give-up`. Each response is the public view of the game: one row per guess with its feedback, the hints, the guesses left and the status, plus the answer once it is over.
 
 ### Daily puzzle, details that are easy to miss
 
@@ -280,13 +285,13 @@ Each step ends green. There is one deploy, at close-out, once every mode exists.
 4. **Team builder.** `team/domain` with tests, then UI.
 5. **Players and database.** Neon, migrations, signed cookie, nickname.
 6. **Hangman, free play.** Server-validated, plus the answer-leak test.
-7. **Stats & types, free play.** Same engine, same test.
+7. **Stats & types, free play.** Same engine, same test. Reworked into Dex Clues in step 12.
 8. **Daily puzzle and streaks.** Puzzle number, timezone window, seeded selection, streaks derived from results. Tests: determinism, different secret → different answer, window boundaries, gap breaks the streak.
 9. **Leaderboard.**
 10. **Close-out.** Playwright smoke (one test per mode), responsive from 360 px.
 11. **Hangman campaign and free-play streak.** Generations unlocked by wins, free play limited to unlocked generations, a scored streak.
-12. **Battler.** A six-pick draft (easy, hard and a secret Nuzlocke) and an eight-team bracket, simulated with the exact damage formula.
-13. **Dex Clues.** Stats & types reworked: ten guesses, types, generation, evolution stage, color, height and weight per guess, and hints unlocked by misses. Its daily round stays.
+12. **Dex Clues.** Stats & types reworked: ten guesses, types, generation, evolution stage, color, height and weight per guess, hints unlocked by misses and a scored free-play streak. Its daily round stays.
+13. **Battler.** A six-pick draft (easy, hard and a secret Nuzlocke) and an eight-team bracket, simulated with the exact damage formula.
 14. **Deploy.** Vercel with the four environment variables, Lighthouse ≥ 90 on mobile, public README with screenshots, and **measured numbers** for the case study.
 
 ### Pending decisions, with a default
@@ -296,7 +301,7 @@ Mark each one as `TODO(pablo):` in the code where it applies, use the default, a
 | Decision | Default |
 |---|---|
 | Species pool for the daily puzzle (all of them or a subset) | All species in the snapshot, frozen as `POOL_V1` |
-| Guess cap in Stats & types | 8 |
+| Guess cap in Dex Clues | 10 (decided by Pablo) |
 | Wrong letters allowed in Hangman | 6 |
 | Site language | English only. PokéAPI has Spanish names if it is ever needed |
 | Launch date (`LAUNCH_DATE`) | The day of the first deploy with the daily puzzle |

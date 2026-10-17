@@ -53,7 +53,7 @@ export interface Daily<G> {
 
 // answer(n) = order[n mod length], one order per mode. A new pool version
 // would take over from a given puzzle number, and older numbers would keep
-// resolving here. Hangman's order is kept apart from Stats & types', so the
+// resolving here. Hangman's order is kept apart from Dex Clues', so the
 // two rounds never share a day's species.
 const guessOrder = shuffle(POOL_V1, env.DAILY_SECRET, "v1");
 const hangmanOrder = apart(

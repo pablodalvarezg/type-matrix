@@ -19,7 +19,7 @@ export function CampaignProgress({
           ? "Campaign complete: every generation is yours."
           : `${names[current - 1]}: ${wins} of ${WINS_PER_GEN} wins.`}
       </p>
-      <ol className="flex flex-wrap gap-2 text-sm">
+      <ol role="list" className="flex flex-wrap gap-2 text-sm">
         {names.map((name, index) => {
           const gen = index + 1;
           const done = gen <= completed;

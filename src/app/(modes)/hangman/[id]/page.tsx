@@ -11,9 +11,9 @@ import {
   getGame,
   getStreaks,
   HangmanBoard,
-  StreakSummary,
 } from "@modules/hangman";
 import { identify, PLAYER_COOKIE } from "@modules/players";
+import { StreakSummary } from "@shared/ui/StreakSummary";
 import { NewGameButton } from "@shared/ui/NewGameButton";
 
 export const metadata: Metadata = { title: "Hangman · Type Matrix" };

@@ -9,7 +9,7 @@ import { identify, NicknameForm, PLAYER_COOKIE } from "@modules/players";
 
 export const metadata: Metadata = { title: "Daily Hangman · Type Matrix" };
 
-// The same board as free play, like the daily Stats & types page: streak and
+// The same board as free play, like the daily Dex Clues page: streak and
 // leaderboard come from the server once the board refreshes on the end.
 export default async function DailyHangmanPage({
   params,

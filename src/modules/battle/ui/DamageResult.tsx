@@ -87,7 +87,7 @@ function Breakdown({
 
       <div className="flex flex-col gap-1">
         <h3 className="text-sm text-muted">All 16 rolls</h3>
-        <ol className="flex flex-wrap gap-x-3 text-sm tabular-nums">
+        <ol role="list" className="flex flex-wrap gap-x-3 text-sm tabular-nums">
           {rolls.map((roll, index) => (
             <li key={index}>{roll}</li>
           ))}

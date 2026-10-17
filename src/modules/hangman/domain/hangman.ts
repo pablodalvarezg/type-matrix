@@ -10,6 +10,8 @@ export type Stop = "closed" | "gave-up";
 export interface Progress {
   /** The name character by character; `null` is a letter not guessed yet. */
   mask: (string | null)[];
+  /** Letters per part of the name, and what joins the parts. As public as the mask. */
+  shape: Shape;
   /** Every letter tried, in order. */
   guessed: string[];
   wrong: string[];
@@ -25,6 +27,32 @@ const fold = (text: string) =>
   text.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
 
 const isLetter = (char: string) => /^[a-z]$/.test(char);
+
+/**
+ * "Mr. Mime" is 2 + 4 letters with a space, "Ho-Oh" 2 + 2 with a hyphen: the
+ * mask shows the gap, but in a row of blanks it is easy to miss (decided by
+ * Pablo on 2026-10-15). Dex Clues' last hint counts the same way; domains
+ * share nothing, so each has its own copy. No name has more than one space or
+ * hyphen.
+ */
+export interface Shape {
+  parts: number[];
+  joiner?: "space" | "hyphen";
+}
+
+export function shapeOf(name: string): Shape {
+  const joiner = name.includes(" ")
+    ? "space"
+    : name.includes("-")
+      ? "hyphen"
+      : undefined;
+  return {
+    parts: name
+      .split(/[ -]/)
+      .map((part) => [...part].filter((char) => isLetter(fold(char))).length),
+    ...(joiner && { joiner }),
+  };
+}
 
 /**
  * `letters` are the guesses in order, already lowercase a–z. Anything in the
@@ -45,6 +73,7 @@ export function progress(name: string, letters: string, stop?: Stop): Progress {
 
   return {
     mask,
+    shape: shapeOf(name),
     guessed: [...letters],
     wrong,
     remaining: MAX_WRONG - wrong.length,

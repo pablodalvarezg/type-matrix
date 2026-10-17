@@ -18,4 +18,5 @@ export {
   findMove,
   findSpecies,
   snapshot,
+  stageOf,
 } from "@modules/dex/data/snapshot.repository";

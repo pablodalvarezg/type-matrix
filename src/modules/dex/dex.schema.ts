@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { TYPE_NAMES, type Snapshot } from "@modules/dex/domain/dex";
+import { COLORS, TYPE_NAMES, type Snapshot } from "@modules/dex/domain/dex";
 
 /*
  * The snapshot is ours and committed, but it is written by a script that reads
@@ -36,6 +36,10 @@ const snapshotSchema = z.object({
         spe: baseStat,
       }),
       moves: z.array(z.string().min(1)),
+      color: z.enum(COLORS),
+      evolvesFrom: z.string().min(1).nullable(),
+      height: z.number().int().positive(),
+      weight: z.number().int().positive(),
     }),
   ),
 });

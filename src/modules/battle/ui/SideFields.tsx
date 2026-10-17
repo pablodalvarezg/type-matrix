@@ -111,7 +111,7 @@ export function SideFields({
             />
           ))}
         </div>
-        <ul className="mt-3 flex flex-col text-sm">
+        <ul role="list" className="mt-3 flex flex-col text-sm">
           {spreadErrors.map(([name, message]) => (
             <li key={name} id={`${name}-error`}>
               ✕ {describeSpreadField(name)}: {message}

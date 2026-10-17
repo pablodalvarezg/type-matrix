@@ -28,7 +28,7 @@ prioridades, en orden:
 ## Qué es Type Matrix
 
 Una **sala de juegos sobre datos de criaturas**: calculadora de daño, armador de
-equipos, ahorcado, "Stats & types" y un puzzle diario con rachas y leaderboard.
+equipos, ahorcado, Dex Clues y un puzzle diario con rachas y leaderboard.
 
 **No es** una Pokédex. Nadie viene a consultar una ficha.
 
@@ -103,7 +103,7 @@ src/
 │  ├─ (modes)/calculator/      # page.tsx: lee searchParams, llama al service
 │  ├─ (modes)/team/            # page.tsx: la misma forma
 │  ├─ (modes)/hangman/         # page.tsx: campaña y free play, cada uno con "Continue" si hay una abierta, si no partida nueva · [id]/page.tsx: el tablero, y al terminar el progreso o la racha
-│  ├─ (modes)/guess/           # Stats & types, la misma forma que hangman
+│  ├─ (modes)/guess/           # Dex Clues (antes Stats & types; la ruta conserva `guess`): page.tsx con la racha y "Continue" o partida nueva · [id]/page.tsx: el tablero, y al terminar la racha
 │  ├─ (modes)/daily/           # page.tsx: las dos rondas, cada una con su botón · guess/[n] y hangman/[n]: el tablero, la racha y el leaderboard
 │  ├─ api/players/nickname/    # route.ts: POST, emite la cookie y guarda el nickname
 │  ├─ api/hangman/games/       # route.ts: POST `{ campaign, gen }` crea la partida o devuelve la abierta de ese modo · [id]/guesses: POST una letra · [id]/give-up: POST
@@ -124,20 +124,20 @@ src/
 │  │  ├─ daily.service.ts      # un "round" por modo: elige la especie (hangman evita la de guess del día), valida la fecha, rachas, leaderboard, getStreaks para la home
 │  │  └─ index.ts
 │  ├─ dex/                     # especies, movimientos, tabla de tipos
-│  │  ├─ domain/               # dex.ts (tipos) · effectiveness.ts · generations.ts: generación por número de Pokédex nacional
+│  │  ├─ domain/               # dex.ts (tipos) · effectiveness.ts · generations.ts: generación por número de Pokédex nacional · evolution.ts: etapa evolutiva derivada de `evolvesFrom`
 │  │  ├─ data/                 # snapshot.repository.ts (server-only), findSpecies/findMove
 │  │  ├─ dex.schema.ts         # Zod del snapshot, se parsea al cargar
 │  │  └─ index.ts
-│  ├─ guess/                   # Stats & types, free play y las partidas del diario
-│  │  ├─ domain/               # guess.ts: ✓/✗ por tipo y veredicto exacto, flechas por stat, estado, `stopped` (cerrado o rendido), respuesta al terminar
-│  │  ├─ ui/                   # GuessBoard (cliente); lo que va al terminar llega por `children`
+│  ├─ guess/                   # Dex Clues (ADR 0010), free play y las partidas del diario
+│  │  ├─ domain/               # guess.ts: ✓/✗ por tipo y veredicto exacto, color ✓/✗, flechas de generación, etapa, altura y peso, pistas por fallos, estado, `stopped` (cerrado o rendido), respuesta al terminar
+│  │  ├─ ui/                   # GuessBoard (cliente): una tarjeta por intento, filas de una grilla (subgrid) desde `md`; lo que va al terminar llega por `children`
 │  │  ├─ guess.schema.ts       # `{ species }` · el id de partida
-│  │  ├─ guess.repository.ts   # como el de hangman: `guesses text[]`, concurrencia por cantidad; `puzzle` y `closes_at` en las diarias; `won_at` por el reloj de la base; `given_up_at`; la última de free play; el leaderboard de un puzzle
-│  │  ├─ guess.service.ts      # una partida abierta a la vez, resuelve el nombre, rendirse, devuelve la vista pública
+│  │  ├─ guess.repository.ts   # como el de hangman: `guesses text[]`, concurrencia por cantidad; `puzzle` y `closes_at` en las diarias; `won_at` por el reloj de la base; `given_up_at`; el historial de free play (segundos hasta ganar); el leaderboard de un puzzle
+│  │  ├─ guess.service.ts      # una partida abierta a la vez (la última del historial; una anterior sin terminar cuenta como perdida), resuelve el nombre, la racha derivada, rendirse, devuelve la vista pública
 │  │  └─ index.ts
 │  ├─ hangman/                 # ahorcado: campaña, free play y las partidas del diario
-│  │  ├─ domain/               # hangman.ts: máscara con acentos plegados, fallos, estado, `stopped`, respuesta al terminar · campaign.ts: progreso por generación, canPick · score.ts: puntos y rachas de free play
-│  │  ├─ ui/                   # HangmanBoard (cliente); lo que va al terminar llega por `children` · Gallows: una parte por fallo · CampaignProgress · CampaignButton · StreakSummary · FreePlayForm (radios y casillas nativos que manda NewGameButton)
+│  │  ├─ domain/               # hangman.ts: máscara con acentos plegados, letras por parte del nombre (`shape`), fallos, estado, `stopped`, respuesta al terminar · campaign.ts: progreso por generación, canPick
+│  │  ├─ ui/                   # HangmanBoard (cliente); lo que va al terminar llega por `children` · Gallows: una parte por fallo · CampaignProgress · CampaignButton · FreePlayForm (radios y casillas nativos que manda NewGameButton)
 │  │  ├─ hangman.schema.ts     # una letra a–z · `{ campaign, gen }` al crear · el id de partida
 │  │  ├─ hangman.repository.ts # crear (y el jugador) con `campaign` y `gens`, buscar, el historial de un modo (segundos hasta ganar), letra y give-up con concurrencia optimista, diarias, ganadores
 │  │  ├─ hangman.service.ts    # una partida abierta por modo (la última del historial; una anterior sin terminar cuenta como perdida), reglas, valida generaciones, progreso y rachas derivados, rendirse, fallos del leaderboard, vista pública
@@ -159,7 +159,9 @@ src/
    ├─ config/                  # env.ts (Zod, server-only) · env-schema.ts (puro)
    ├─ db/                      # client.ts: neon() sobre HTTP (server-only) · rate-limit.ts: hit() por clave y hora
    ├─ http/                    # require-json.ts: el 415 de toda ruta que emite la cookie · throttle.ts: el 429 por IP
-   ├─ ui/                      # Combobox · NewGameButton (cliente; manda lo marcado en su `[data-game-options]`) · ContinueLink (server) · Pill (radio o casilla nativa)
+   ├─ ui/                      # Combobox · NewGameButton (cliente; manda lo marcado en su `[data-game-options]`) · ContinueLink (server) · Pill (radio o casilla nativa) · StreakSummary (racha de free play)
+   ├─ name-shape.ts            # describeShape: "2 + 4 letters, with a space", el texto de la forma del nombre en los dos modos; cada dominio cuenta sus partes
+   ├─ score.ts                 # puntos y rachas de free play, del ahorcado y de Dex Clues: `points(lo que sobra, segundos)`
    ├─ game.ts                  # lo que comparten los modos: stopOf (cerrado o rendido) · serverAhead (cuándo un tablero toma la partida del servidor)
    └─ search-params.ts         # SearchParams · param(), de los formularios GET
 data/snapshot.json             # generado por scripts/ingest.ts, commiteado
@@ -175,7 +177,10 @@ docs/adr/                      # NNNN-titulo.md, una decisión de arquitectura p
 
 - **Qué trae:** las 1025 especies en su forma por defecto (sin formas regionales,
   decidido por Pablo el 2026-10-03), los movimientos de daño con poder fijo y la
-  tabla de tipos de 18×18, solo con los pares que no son ×1.
+  tabla de tipos de 18×18, solo con los pares que no son ×1. Por especie,
+  además de tipos, stats y movimientos: color de la Pokédex, altura en
+  decímetros, peso en hectogramos (enteros exactos de PokéAPI) y `evolvesFrom`,
+  el slug de su preevolución. La etapa evolutiva se deriva de ese campo.
 - **Learnsets fieles a cada especie** (decidido el 2026-10-03). Cada especie trae
   los movimientos que aprende en el juego más reciente donde aparece:
   Scarlet/Violet con sus DLC, y si no está, Sword/Shield, BDSP, USUM… en ese
@@ -395,6 +400,10 @@ Reglas que no se negocian, porque son la tesis:
 - **Un contenedor con `overflow-x-auto` que tenga `sr-only` adentro lleva
   `relative`.** El `sr-only` es `position: absolute`: si el contenedor no está
   posicionado, se escapa del recorte y le agrega scroll horizontal a la página.
+- **Toda `<ol>` o `<ul>` lleva `role="list"`.** El preflight de Tailwind les
+  saca las viñetas (`list-style: none`), y WebKit con eso les quita el rol de
+  lista: VoiceOver deja de anunciarla y de contar los ítems. La lista del
+  Combobox no: es un `listbox`, con su propio rol.
 - **La lógica que puede estar mal va en `domain/`**, no al lado del componente, para que los tests la vean.
 
 ## Calidad
@@ -416,12 +425,13 @@ Reglas que no se negocian, porque son la tesis:
   route handlers con el repositorio en memoria, y revisa también la vista que
   recibe la página. Verificado que muerde, en los dos modos: con la respuesta
   siempre en la vista, los cuatro casos de partida de ese modo fallan. En
-  Stats & types los números dentro de `stats` no se comparan con el número de
-  la Pokédex: las stats de un intento pueden coincidir con él por azar. En
-  cambio, la línea de stats de la respuesta no puede aparecer en ningún
-  objeto, con cualquier clave: es la respuesta sin el nombre (verificado que
-  muerde). Los intentos del test no comparten esa línea con la respuesta, y
-  el test lo comprueba: hay 15 grupos de especies con las mismas stats.
+  Dex Clues la altura y el peso no se comparan con el número de la Pokédex:
+  los de un intento pueden coincidir con él por azar. En cambio, ningún
+  objeto puede tener la altura y el peso de la respuesta juntos: es la
+  respuesta sin el nombre (verificado que muerde: con ese par en las pistas,
+  los ocho casos de Dex Clues fallan). Los intentos del test no comparten ese
+  par con la respuesta, y el test lo comprueba. Las pistas sí revelan parte
+  de la respuesta (generación, tipos, inicial y letras por parte), a propósito.
   El diario juega su puzzle #1 con `LAUNCH_DATE` = hoy y revisa también la
   vista de `/daily/guess/[n]` (verificado que muerde: con el slug de la respuesta en
   esa vista, sus dos casos fallan). También prueba que un puzzle cerrado no
@@ -432,7 +442,7 @@ Reglas que no se negocian, porque son la tesis:
   (verificado que muerde: con `answer` dentro de `game`, la aserción vieja,
   solo en el primer nivel, pasaba).
   El ahorcado diario juega su puzzle #1 igual, ganando y perdiendo; su
-  especie no es la de Stats & types ese día y su número de Pokédex supera los
+  especie no es la de Dex Clues ese día y su número de Pokédex supera los
   números chicos de la vista (fallos restantes, el puzzle). Rendirse se juega
   en los cuatro tipos de partida: ninguna respuesta anterior al give-up trae
   la respuesta, el give-up sí, y después no se aceptan intentos ni otro
@@ -564,28 +574,32 @@ Trabajá solo en el paso actual. No adelantes el siguiente.
             y descartaba el tap.
 
 Alcance nuevo, decidido por Pablo el 2026-10-13 y el 2026-10-14. El deploy
-pasa al final, después del paso 13.
+pasa al final, después del paso 13. Dex Clues va antes que el Battler
+(decidido el 2026-10-15).
 
-- [ ] **11. Campaña y racha del ahorcado** ← en curso (ADR 0009). Campaña por
+- [x] **11. Campaña y racha del ahorcado** (#12, ADR 0009). Campaña por
       generaciones desde Gen I: 10 victorias completan una, cada derrota resta
       una (sin bajar de 0) y una generación completada no se pierde. Free play
       aleatorio sobre todas; limitable a una generación completada, y a
       cualquier combinación al terminar la campaña. Racha de free play con
       puntos (`100 + 20 × fallos que sobran + 1 por segundo bajo 180`), solo
       para el jugador.
-- [ ] **12. Battler.** Draft de 6 elecciones: fácil (6 ofertas, 6 rerolls),
+- [ ] **12. Dex Clues** ← en curso (ADR 0010). Stats & types rehecho; solo
+      cambia el nombre visible, el código sigue siendo `guess`. 10 intentos;
+      por intento, tipos ✓/✗, generación, etapa, altura (m, 2 decimales) y
+      peso (kg, 1 decimal) con flecha, y color ✓/✗; pistas tras el fallo 3
+      (generación), 6 (tipado) y 9 (primera letra y letras por parte, con el espacio o guion: "2 + 4 letters, with a space"); una tarjeta por
+      intento en mobile; racha de free play con
+      `100 + 20 × intentos que sobran + 1 por segundo bajo 180`. La ronda
+      diaria sigue, con el modo nuevo. La ingesta sumó color, altura, peso y
+      `evolvesFrom`.
+- [ ] **13. Battler.** Draft de 6 elecciones: fácil (6 ofertas, 6 rerolls),
       difícil (3 y 3) y Nuzlocke secreto (se desbloquea ganando un torneo en
       difícil: 3 ofertas, sin rerolls, solo especies que no evolucionan con
       450 o más de stats base, y la que cae KO queda muerta para el resto del
       bracket). Bracket de 8, simulación propia con la fórmula exacta y las
-      seis stats, sin habilidades, ítems ni estados. La ingesta suma cadenas
-      de evolución, color, altura y peso, para este paso y el siguiente.
-- [ ] **13. Dex Clues.** Stats & types rehecho: 10 intentos; por intento,
-      tipos ✓/✗, generación, etapa, altura y peso con flecha, y color ✓/✗;
-      pistas tras el fallo 3 (generación), 6 (tipado) y 9 (primera letra y
-      largo); una tarjeta por intento en mobile; racha de free play con
-      `100 + 20 × intentos que sobran + 1 por segundo bajo 180`. La ronda
-      diaria sigue, con el modo nuevo.
+      seis stats, sin habilidades, ítems ni estados. "No evoluciona" sale de
+      `evolvesFrom` (paso 12): ninguna especie evoluciona desde ella.
 - [ ] **14. Deploy.**
       - [ ] **Pablo:** deploy en Vercel con las cuatro variables, `LAUNCH_DATE`
             = día del deploy, `db:migrate` contra la base de producción,

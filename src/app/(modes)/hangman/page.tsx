@@ -8,9 +8,9 @@ import {
   CampaignProgress,
   FreePlayForm,
   getOverview,
-  StreakSummary,
 } from "@modules/hangman";
 import { identify, PLAYER_COOKIE } from "@modules/players";
+import { StreakSummary } from "@shared/ui/StreakSummary";
 import { ContinueLink } from "@shared/ui/ContinueLink";
 
 export const metadata: Metadata = {

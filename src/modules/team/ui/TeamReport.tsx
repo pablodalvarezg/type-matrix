@@ -63,7 +63,7 @@ function Report({
 }) {
   return (
     <div className="flex animate-pop flex-col gap-6">
-      <ul className="flex flex-wrap gap-x-4 text-sm">
+      <ul role="list" className="flex flex-wrap gap-x-4 text-sm">
         {result.members.map((member) => (
           <li key={member.name}>
             {member.name}{" "}
@@ -164,7 +164,10 @@ function Report({
               Type pairs some species has, which no STAB type hits for more than
               ×1.
             </p>
-            <ul className="flex flex-wrap gap-x-4 text-sm tabular-nums">
+            <ul
+              role="list"
+              className="flex flex-wrap gap-x-4 text-sm tabular-nums"
+            >
               {result.holes.map((row) => (
                 <li key={typing(row.defender)} className="capitalize">
                   {typing(row.defender)} ×{row.best}

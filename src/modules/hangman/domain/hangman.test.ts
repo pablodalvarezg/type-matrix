@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { MAX_WRONG, progress } from "@modules/hangman/domain/hangman";
+import { MAX_WRONG, progress, shapeOf } from "@modules/hangman/domain/hangman";
 
 const shown = (name: string, letters: string) =>
   progress(name, letters)
@@ -11,6 +11,7 @@ describe("progress", () => {
   it("hides every letter of a new game", () => {
     expect(progress("Pikachu", "")).toEqual({
       mask: Array(7).fill(null),
+      shape: { parts: [7] },
       guessed: [],
       wrong: [],
       remaining: MAX_WRONG,
@@ -27,6 +28,18 @@ describe("progress", () => {
     ["Ho-Oh", "__-__"],
   ])("shows what is not a letter in %s from the start", (name, mask) => {
     expect(shown(name, "")).toBe(mask);
+  });
+
+  it.each([
+    ["Mr. Mime", { parts: [2, 4], joiner: "space" }],
+    ["Type: Null", { parts: [4, 4], joiner: "space" }],
+    ["Ho-Oh", { parts: [2, 2], joiner: "hyphen" }],
+    ["Farfetch’d", { parts: [9] }],
+    ["Nidoran♀", { parts: [7] }],
+    ["Porygon2", { parts: [7] }],
+    ["Flabébé", { parts: [7] }],
+  ])("counts the letters of each part of %s", (name, shape) => {
+    expect(shapeOf(name)).toEqual(shape);
   });
 
   it("reveals a letter in every case and position", () => {

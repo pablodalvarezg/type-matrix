@@ -11,9 +11,13 @@ import { getDaily } from "@modules/daily";
 import { apart, shuffle } from "@modules/daily/domain/daily";
 import { POOL_V1 } from "@modules/daily/domain/pool";
 import { findSpecies, snapshot, type Species } from "@modules/dex";
-import { getGame as getStatsGame } from "@modules/guess";
+import {
+  getGame as getStatsGame,
+  getOverview as getStatsOverview,
+} from "@modules/guess";
 import { getGame, getOverview } from "@modules/hangman";
-import { MAX_WRONG } from "@modules/hangman/domain/hangman";
+import { MAX_GUESSES } from "@modules/guess/domain/guess";
+import { MAX_WRONG, shapeOf } from "@modules/hangman/domain/hangman";
 
 /*
  * The project's thesis as a test: play whole games through the route
@@ -82,21 +86,6 @@ vi.mock("node:crypto", async (original) => ({
   ...(await original<typeof import("node:crypto")>()),
   randomInt: () => pick.index,
 }));
-// Free play is the latest game without a puzzle, as the table orders them.
-const latest = vi.hoisted(
-  () =>
-    <G extends { playerId: string; puzzle?: number }>(
-      map: Map<string, G>,
-      playerId: string,
-    ) => {
-      const found = [...map].filter(
-        ([, game]) => game.playerId === playerId && !game.puzzle,
-      );
-      const last = found.at(-1);
-      return last && { id: last[0], ...last[1] };
-    },
-);
-
 // Campaign and free play are two modes on one table, as in the repository.
 const ofMode = vi.hoisted(
   () => (playerId: string, campaign: boolean) =>
@@ -203,10 +192,16 @@ vi.mock("@modules/guess/guess.repository", () => ({
     });
     return id;
   },
-  findLatestGame: async (playerId: string) => {
-    const game = latest(statsGames, playerId);
-    return game && { ...game, guesses: [...game.guesses] };
-  },
+  // Free play in created order; no clock, so every win took no time.
+  findHistory: async (playerId: string) =>
+    [...statsGames]
+      .filter(([, game]) => game.playerId === playerId && !game.puzzle)
+      .map(([id, game]) => ({
+        id,
+        ...game,
+        guesses: [...game.guesses],
+        seconds: 0,
+      })),
   giveUp: async (id: string, playerId: string, count: number) => {
     const game = statsGames.get(id);
     if (
@@ -277,14 +272,15 @@ const post = (body?: object, type = "application/json") =>
     body: body && JSON.stringify(body),
   });
 
-// Stats & types shows the guesses' base stats, any of which may equal the
-// answer's dex number by chance: those are skipped, every other number is not.
+// Dex Clues shows each guess's height and weight, either of which may equal
+// the answer's dex number by chance: those are skipped, every other number
+// is not.
 const numbersIn = (value: unknown): number[] =>
   typeof value === "number"
     ? [value]
     : value && typeof value === "object"
       ? Object.entries(value).flatMap(([key, inner]) =>
-          key === "stats" ? [] : numbersIn(inner),
+          key === "height" || key === "weight" ? [] : numbersIn(inner),
         )
       : [];
 
@@ -292,6 +288,12 @@ const objectsIn = (value: unknown): object[] =>
   value && typeof value === "object"
     ? [value, ...Object.values(value).flatMap(objectsIn)]
     : [];
+
+const sameBuild = (o: object, species: Species) =>
+  "height" in o &&
+  "weight" in o &&
+  o.height === species.height &&
+  o.weight === species.weight;
 
 function expectNoAnswer(responses: unknown[], species: Species) {
   for (const response of responses) {
@@ -301,9 +303,11 @@ function expectNoAnswer(responses: unknown[], species: Species) {
     expect(text).not.toContain(species.name.toLowerCase());
     expect(text).not.toContain(species.slug);
     expect(numbersIn(response)).not.toContain(species.id);
-    // The stat line alone, under any key, is the answer without its name.
-    // The guesses below never share it (checked where they are picked).
-    expect(objectsIn(response)).not.toContainEqual(species.stats);
+    // Height and weight together are the answer without its name. The
+    // guesses below never share them (checked where they are picked).
+    expect(objectsIn(response).filter((o) => sameBuild(o, species))).toEqual(
+      [],
+    );
   }
 }
 
@@ -424,20 +428,20 @@ describe("Hangman: no answer before the game is over", () => {
   });
 });
 
-// The first species in dex order. A wrong guess shows its own name and
-// stats, so none may contain an answer's name ("Mewtwo" contains "Mew") or
-// share its stat line.
-const WRONG = snapshot.species.slice(0, 9);
+// The first species in dex order, enough to run out of guesses. A wrong
+// guess shows its own name, height and weight, so none may contain an
+// answer's name ("Mewtwo" contains "Mew") or share its height and weight.
+const WRONG = snapshot.species.slice(0, MAX_GUESSES);
 
 const guesses = (outcome: "won" | "lost") => (answer: Species) => {
   const misses = WRONG.filter((guess) => guess !== answer);
-  expect(misses.map((guess) => guess.stats)).not.toContainEqual(answer.stats);
+  expect(misses.filter((guess) => sameBuild(guess, answer))).toEqual([]);
   return (outcome === "won" ? [...misses.slice(0, 3), answer] : misses).map(
     (guess) => ({ species: guess.name }),
   );
 };
 
-describe("Stats & types: no answer before the game is over", () => {
+describe("Dex Clues: no answer before the game is over", () => {
   it.each(GAMES)("%s, %s", async (slug, outcome) => {
     const { species: answer, responses } = await play(
       "stats",
@@ -447,7 +451,11 @@ describe("Stats & types: no answer before the game is over", () => {
 
     expect(responses.at(-1)).toMatchObject({
       status: outcome,
-      answer: { name: answer.name, stats: answer.stats },
+      answer: {
+        name: answer.name,
+        height: answer.height,
+        weight: answer.weight,
+      },
     });
     expectNoAnswer(responses.slice(0, -1), answer);
   });
@@ -462,6 +470,17 @@ describe("Stats & types: no answer before the game is over", () => {
     expect(response.status).toBe(400);
     expect(await getStatsGame(game.id, playerOf())).toMatchObject({
       remaining: game.remaining,
+    });
+  });
+
+  it("scores a free-play win by the guesses it left", async () => {
+    const { responses } = await play("stats", "mr-mime", guesses("won"));
+    const { rows } = responses.at(-1) as { rows: unknown[] };
+    const { streaks } = await getStatsOverview(playerOf());
+    // No clock in the mock: the full time bonus.
+    expect(streaks.current).toEqual({
+      wins: 1,
+      points: 100 + 20 * (MAX_GUESSES - rows.length) + 180,
     });
   });
 
@@ -488,7 +507,11 @@ describe("Daily puzzle: no answer before the game is over", () => {
 
     expect(responses.at(-1)).toMatchObject({
       status: outcome,
-      answer: { name: answer.name, stats: answer.stats },
+      answer: {
+        name: answer.name,
+        height: answer.height,
+        weight: answer.weight,
+      },
     });
     expectNoAnswer(responses.slice(0, -1), answer);
   });
@@ -522,7 +545,7 @@ describe("Daily puzzle: no answer before the game is over", () => {
   });
 });
 
-// Puzzle #1's Hangman round under the test secret, never the Stats & types one.
+// Puzzle #1's Hangman round under the test secret, never the Dex Clues one.
 const DAILY_HANGMAN = apart(
   shuffle(POOL_V1, "d".repeat(32), "hangman-v1"),
   shuffle(POOL_V1, "d".repeat(32), "v1"),
@@ -535,8 +558,11 @@ describe("Daily Hangman: no answer before the game is over", () => {
       DAILY_HANGMAN,
       letters(outcome),
     );
-    // The views carry small numbers (misses left, the puzzle): not a dex id.
-    expect(species.id).toBeGreaterThan(MAX_WRONG);
+    // The views carry small numbers (misses left, the puzzle, letters per
+    // part of the name): not a dex id.
+    expect(species.id).toBeGreaterThan(
+      Math.max(MAX_WRONG, ...shapeOf(species.name).parts),
+    );
     expect(DAILY_HANGMAN).not.toBe(DAILY);
 
     expect(responses.at(-1)).toMatchObject({

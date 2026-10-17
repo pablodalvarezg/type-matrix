@@ -21,13 +21,13 @@ const modes = [
     href: "/hangman",
   },
   {
-    name: "Stats & types",
-    blurb: "Guess a species from its numbers.",
+    name: "Dex Clues",
+    blurb: "Guess a species from its dex entry, with hints as you miss.",
     href: "/guess",
   },
   {
     name: "Daily puzzle",
-    blurb: "A Stats & types and a Hangman round a day, the same for everyone.",
+    blurb: "A Dex Clues and a Hangman round a day, the same for everyone.",
     href: "/daily",
   },
 ];
@@ -48,7 +48,7 @@ export default async function Home() {
         </p>
       </header>
 
-      <ul className="flex flex-col gap-3">
+      <ul role="list" className="flex flex-col gap-3">
         {/* The whole card clicks, but only the title is the link, so its
             name stays the title while the daily card's countdown ticks: the
             link's ::after covers the card, and reaches 1px past its right and
@@ -77,7 +77,7 @@ export default async function Home() {
                 <span className="flex shrink-0 flex-col items-start text-sm tabular-nums sm:items-end">
                   {streaks && (
                     <>
-                      <span>Stats &amp; types streak: {streaks.guess}</span>
+                      <span>Dex Clues streak: {streaks.guess}</span>
                       <span>Hangman streak: {streaks.hangman}</span>
                     </>
                   )}

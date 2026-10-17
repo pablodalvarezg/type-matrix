@@ -4,11 +4,12 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { Countdown, getDaily, Leaderboard } from "@modules/daily";
+import { GENERATION_NAMES } from "@modules/dex";
 import { GuessBoard, speciesNames } from "@modules/guess";
 import { identify, NicknameForm, PLAYER_COOKIE } from "@modules/players";
 
 export const metadata: Metadata = {
-  title: "Daily Stats & types · Type Matrix",
+  title: "Daily Dex Clues · Type Matrix",
 };
 
 // The same board as free play. The streak and the leaderboard are rendered
@@ -28,16 +29,19 @@ export default async function DailyGuessPage({
   const { game, streak, leaderboard, askNickname } = daily;
 
   return (
-    <main className="mx-auto flex max-w-2xl flex-col gap-6 px-4 py-8">
+    <main className="mx-auto flex max-w-3xl flex-col gap-6 px-4 py-8">
       <header className="flex flex-col gap-2">
         <Link href="/daily" className="self-start text-sm text-muted underline">
           ← Daily puzzle
         </Link>
-        <h1 className="text-3xl font-bold">
-          Daily Stats &amp; types #{game.puzzle}
-        </h1>
+        <h1 className="text-3xl font-bold">Daily Dex Clues #{game.puzzle}</h1>
       </header>
-      <GuessBoard key={game.id} initial={game} names={speciesNames}>
+      <GuessBoard
+        key={game.id}
+        initial={game}
+        names={speciesNames}
+        generations={GENERATION_NAMES}
+      >
         {streak && (
           <p className="flex flex-col gap-1 tabular-nums">
             <span>

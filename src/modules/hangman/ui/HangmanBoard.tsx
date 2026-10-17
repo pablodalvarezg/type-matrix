@@ -6,6 +6,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { Progress } from "@modules/hangman/domain/hangman";
 import { Gallows } from "@modules/hangman/ui/Gallows";
 import { serverAhead } from "@shared/game";
+import { describeShape } from "@shared/name-shape";
 
 type Game = Progress & { id: string };
 
@@ -114,6 +115,9 @@ export function HangmanBoard({
           ))}
         </span>
         <span className="sr-only">The name: {spoken}</span>
+      </p>
+      <p className="-mt-4 text-sm text-muted tabular-nums">
+        {describeShape(game.shape)}
       </p>
 
       <div className="flex items-center gap-4">
