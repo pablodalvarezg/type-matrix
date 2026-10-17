@@ -13,9 +13,16 @@ test.afterEach(async ({ page }) => {
   expect(width, "horizontal scroll").toBeLessThanOrEqual(360);
 });
 
-test("home: the five modes, linked", async ({ page }) => {
+test("home: the six modes, linked", async ({ page }) => {
   await page.goto("/");
-  for (const href of ["/calculator", "/team", "/hangman", "/guess", "/daily"]) {
+  for (const href of [
+    "/calculator",
+    "/team",
+    "/hangman",
+    "/guess",
+    "/battler",
+    "/daily",
+  ]) {
     await expect(page.locator(`main a[href="${href}"]`)).toBeVisible();
   }
   await expect(page.getByText(/Next puzzle in \d+:\d\d/)).toBeVisible();
@@ -70,7 +77,7 @@ test("hangman campaign: a Gen I game, then the next one", async ({ page }) => {
   await page.getByRole("button", { name: "Play Gen I" }).click();
   await page.waitForURL(/\/hangman\/[\w-]+$/);
   await expect(
-    page.getByRole("heading", { name: "Hangman campaign" }),
+    page.getByRole("heading", { name: "Hangman campaign: Gen I" }),
   ).toBeVisible();
   await spellOut(page);
   await expect(page.getByText(/^Gen I: \d+ of 10 wins\.$/)).toBeVisible();
@@ -107,6 +114,58 @@ test("dex clues: a hint, resumed from the breadcrumb, then given up", async ({
   await expect(page.getByRole("status").first()).toContainText(
     /You gave up\. It was /,
   );
+  await expect(page.getByRole("button", { name: "Play again" })).toBeVisible();
+});
+
+test("battler: an easy draft, ordered, and its bracket", async ({ page }) => {
+  await page.goto("/battler");
+  // A run an earlier test left open is offered back; it is finished here.
+  const easy = page.getByRole("region", { name: "Easy" });
+  await easy
+    .getByRole("button", { name: "Start a draft" })
+    .or(easy.getByRole("link", { name: "Continue your game" }))
+    .click();
+  await page.waitForURL(/\/battler\/[\w-]+$/);
+
+  const reroll = page.getByRole("button", { name: /^Reroll the offers/ });
+  if (await reroll.isVisible()) {
+    const before = await reroll.innerText();
+    await reroll.click();
+    await expect(reroll).not.toHaveText(before);
+  }
+
+  const stage = page.getByRole("heading", { level: 2 }).first();
+  for (;;) {
+    const pick = /^Pick (\d) of 6$/.exec(await stage.innerText());
+    if (!pick) break;
+    await page.getByRole("list").first().getByRole("button").first().click();
+    await expect(stage).toHaveText(
+      pick[1] === "6" ? "Order your team" : `Pick ${Number(pick[1]) + 1} of 6`,
+    );
+  }
+
+  await page
+    .getByRole("button", { name: /^Move .+ down$/ })
+    .first()
+    .click();
+  await expect(page.getByRole("status")).toContainText("is now number 2");
+  await page.getByRole("button", { name: "Start the tournament" }).click();
+  // Rival matches appear on their own; the player's waits for "Begin
+  // combat", and "Skip" jumps to the next one. The outcome waits for the end.
+  const outcome = page.getByText(/^(Champion!|Runner-up|Out in the)/);
+  const control = page.getByRole("button", {
+    name: /^(Begin combat|Skip)$/,
+  });
+  await expect(control).toHaveText("Begin combat");
+  await expect(page.getByRole("log", { name: "Battle log" })).toBeEmpty();
+  await expect(outcome).toHaveCount(0);
+  while (await control.isVisible()) {
+    await control.click().catch(() => {});
+  }
+  await expect(outcome).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Final", exact: true }),
+  ).toBeVisible();
   await expect(page.getByRole("button", { name: "Play again" })).toBeVisible();
 });
 

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  evolves,
   findMove,
   findSpecies,
   snapshot,
@@ -124,6 +125,29 @@ describe("evolution stages", () => {
     ["perrserker", 2],
   ])("puts %s at stage %i", (slug, stage) => {
     expect(stageOf(slug)).toBe(stage);
+  });
+});
+
+describe("evolves", () => {
+  it.each([
+    ["pikachu", true],
+    ["raichu", false],
+    ["eevee", true],
+    ["tauros", false],
+    ["bisharp", true],
+    ["kingambit", false],
+    // PokéAPI chains it to Sirfetch'd, though only Galarian Farfetch'd
+    // evolves; followed as is (decided by Pablo on 2026-10-14).
+    ["farfetchd", true],
+  ])("says whether %s evolves: %s", (slug, expected) => {
+    expect(evolves(slug)).toBe(expected);
+  });
+});
+
+describe("move accuracy", () => {
+  it("is a percent, or null for a move that never misses", () => {
+    expect(findMove("hydro-pump")?.accuracy).toBe(80);
+    expect(findMove("swift")?.accuracy).toBeNull();
   });
 });
 

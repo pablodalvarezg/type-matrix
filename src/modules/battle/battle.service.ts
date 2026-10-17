@@ -9,7 +9,14 @@ import {
 
 import { parseCalculator } from "@modules/battle/battle.schema";
 import { damage, type DamageResult } from "@modules/battle/domain/damage";
-import { computeStats } from "@modules/battle/domain/stats";
+import {
+  BATTLE_LEVEL,
+  simulate,
+  UNUSED_MOVES,
+  type Battle,
+  type Fighter,
+} from "@modules/battle/domain/simulate";
+import { computeStats, type Stats } from "@modules/battle/domain/stats";
 import { param, type SearchParams } from "@shared/search-params";
 
 /*
@@ -141,4 +148,59 @@ function lookUpMove(
     return undefined;
   }
   return move;
+}
+
+const statsOf = (value: number): Stats => ({
+  hp: value,
+  atk: value,
+  def: value,
+  spa: value,
+  spd: value,
+  spe: value,
+});
+
+// Every fighter the same: IVs 31, no EVs, a neutral nature.
+const buildFighter = (species: Species): Fighter => ({
+  name: species.name,
+  types: species.types,
+  stats: computeStats({
+    level: BATTLE_LEVEL,
+    base: species.stats,
+    ivs: statsOf(31),
+    evs: statsOf(0),
+    nature: { up: null, down: null },
+  }),
+  moves: species.moves
+    .filter((slug) => !UNUSED_MOVES.has(slug))
+    .map((slug) => findMove(slug)!),
+});
+
+// Built once per species: a bracket replays the same ones many times.
+const fighters = new Map<string, Fighter>();
+const fighterOf = (species: Species) => {
+  let fighter = fighters.get(species.slug);
+  if (!fighter) fighters.set(species.slug, (fighter = buildFighter(species)));
+  return fighter;
+};
+
+/** Whether a species has a move a battle uses. */
+export const canBattle = (species: Species) =>
+  fighterOf(species).moves.length > 0;
+
+/** Two teams in order, played out; `random` is [0, 1), seeded to replay. */
+export function battle(
+  teams: [Species[], Species[]],
+  random: () => number,
+): Battle {
+  return simulate(
+    [teams[0].map(fighterOf), teams[1].map(fighterOf)],
+    // The simulation's types are strings; these all come from the snapshot.
+    (type, defender) =>
+      effectiveness(
+        snapshot.typeChart,
+        type as Move["type"],
+        defender as Species["types"],
+      ),
+    random,
+  );
 }

@@ -31,3 +31,8 @@ const stagesBySlug = stages(snapshot.species);
 
 /** 1, 2 or 3: where a snapshot species sits in its evolution line. */
 export const stageOf = (slug: string) => stagesBySlug.get(slug)!;
+
+const ancestors = new Set(snapshot.species.flatMap((s) => s.evolvesFrom ?? []));
+
+/** Whether some species evolves from this one. */
+export const evolves = (slug: string) => ancestors.has(slug);

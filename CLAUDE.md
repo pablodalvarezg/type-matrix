@@ -28,7 +28,7 @@ prioridades, en orden:
 ## Qué es Type Matrix
 
 Una **sala de juegos sobre datos de criaturas**: calculadora de daño, armador de
-equipos, ahorcado, Dex Clues y un puzzle diario con rachas y leaderboard.
+equipos, ahorcado, Dex Clues, un battler y un puzzle diario con rachas y leaderboard.
 
 **No es** una Pokédex. Nadie viene a consultar una ficha.
 
@@ -99,23 +99,32 @@ Lo que hay hoy, no solo adónde van las cosas:
 src/
 ├─ app/                        # SOLO routing y composición
 │  ├─ layout.tsx               # html, body, tokens globales
-│  ├─ page.tsx                 # home: los cinco modos, cada tarjeta entera es el link; la del diario, con rachas y cuenta regresiva
+│  ├─ page.tsx                 # home: los seis modos, cada tarjeta entera es el link; la del diario, con rachas y cuenta regresiva
 │  ├─ (modes)/calculator/      # page.tsx: lee searchParams, llama al service
 │  ├─ (modes)/team/            # page.tsx: la misma forma
 │  ├─ (modes)/hangman/         # page.tsx: campaña y free play, cada uno con "Continue" si hay una abierta, si no partida nueva · [id]/page.tsx: el tablero, y al terminar el progreso o la racha
 │  ├─ (modes)/guess/           # Dex Clues (antes Stats & types; la ruta conserva `guess`): page.tsx con la racha y "Continue" o partida nueva · [id]/page.tsx: el tablero, y al terminar la racha
+│  ├─ (modes)/battler/         # page.tsx: una sección por dificultad (el Nuzlocke, solo desbloqueado) con "Continue" o draft nuevo · [id]/page.tsx: el draft, o el bracket jugado
 │  ├─ (modes)/daily/           # page.tsx: las dos rondas, cada una con su botón · guess/[n] y hangman/[n]: el tablero, la racha y el leaderboard
 │  ├─ api/players/nickname/    # route.ts: POST, emite la cookie y guarda el nickname
 │  ├─ api/hangman/games/       # route.ts: POST `{ campaign, gen }` crea la partida o devuelve la abierta de ese modo · [id]/guesses: POST una letra · [id]/give-up: POST
 │  ├─ api/guess/games/         # la misma forma; el intento es `{ species }`, nombre o slug
+│  ├─ api/battler/games/       # route.ts: POST `{ difficulty }` crea el torneo o devuelve el abierto · [id]/picks, [id]/rerolls, [id]/order: POST, comparten draft.ts
 │  ├─ api/daily/games/         # route.ts: POST `{ date, mode }`, crea o devuelve la del día; intentos y give-up van a la API del modo
 │  └─ globals.css              # los tokens del tema, claro y oscuro
 ├─ modules/
 │  ├─ battle/                  # stats y daño
-│  │  ├─ domain/               # stats.ts · damage.ts, con los vectores del oráculo
+│  │  ├─ domain/               # stats.ts · damage.ts, con los vectores del oráculo · simulate.ts: combate 6 vs 6 y UNUSED_MOVES, los movimientos que no usa
 │  │  ├─ ui/                   # CalculatorForm · SideFields · DamageResult · NumberField
 │  │  ├─ battle.schema.ts      # Zod de los search params del formulario
-│  │  ├─ battle.service.ts     # busca en dex, STAB, efectividad, llama al domain
+│  │  ├─ battle.service.ts     # busca en dex, STAB, efectividad, llama al domain · battle(): arma los luchadores a nivel 50 y simula
+│  │  └─ index.ts
+│  ├─ battler/                 # draft y torneo (ADR 0011)
+│  │  ├─ domain/               # draft.ts: reglas por dificultad, pools, ofertas, draft y nombres de los rivales, bracket; recibe `random` y `play` · reveal.ts: los pasos del revelado
+│  │  ├─ ui/                   # DraftBoard (cliente): ofertas, rerolls y orden · BracketReveal: el bracket paso a paso, solo desde DraftBoard · Bracket: rondas, logs y el trofeo del ganador (Trophy, SVG propio) · SpeciesCard
+│  │  ├─ battler.schema.ts     # `{ difficulty }` · `{ species }` · `{ order }` · el id
+│  │  ├─ battler.repository.ts # `battler_runs`: crear, buscar, el historial, saveDraft con concurrencia sobre lo leído
+│  │  ├─ battler.service.ts    # la semilla (HMAC por propósito) nunca sale; ofertas, rivales, bracket y desbloqueo del Nuzlocke derivados de la fila
 │  │  └─ index.ts
 │  ├─ daily/                   # puzzle diario, sin repositorio: sus partidas son de guess y de hangman
 │  │  ├─ domain/               # daily.ts: número, ventana UTC−12…+14, mezcla con HMAC, apart (dos órdenes sin la misma especie en una posición), rachas · time.ts: hasta la medianoche local y formato del tiempo (sin node:crypto, corre en el navegador) · pool.ts: POOL_V1
@@ -125,7 +134,7 @@ src/
 │  │  └─ index.ts
 │  ├─ dex/                     # especies, movimientos, tabla de tipos
 │  │  ├─ domain/               # dex.ts (tipos) · effectiveness.ts · generations.ts: generación por número de Pokédex nacional · evolution.ts: etapa evolutiva derivada de `evolvesFrom`
-│  │  ├─ data/                 # snapshot.repository.ts (server-only), findSpecies/findMove
+│  │  ├─ data/                 # snapshot.repository.ts (server-only), findSpecies/findMove, stageOf, evolves
 │  │  ├─ dex.schema.ts         # Zod del snapshot, se parsea al cargar
 │  │  └─ index.ts
 │  ├─ guess/                   # Dex Clues (ADR 0010), free play y las partidas del diario
@@ -180,7 +189,9 @@ docs/adr/                      # NNNN-titulo.md, una decisión de arquitectura p
   tabla de tipos de 18×18, solo con los pares que no son ×1. Por especie,
   además de tipos, stats y movimientos: color de la Pokédex, altura en
   decímetros, peso en hectogramos (enteros exactos de PokéAPI) y `evolvesFrom`,
-  el slug de su preevolución. La etapa evolutiva se deriva de ese campo.
+  el slug de su preevolución. La etapa evolutiva se deriva de ese campo. Por
+  movimiento, la precisión (null si nunca falla; PokéAPI le da 0 a Tachyon
+  Cutter, y la ingesta lo lee como null).
 - **Learnsets fieles a cada especie** (decidido el 2026-10-03). Cada especie trae
   los movimientos que aprende en el juego más reciente donde aparece:
   Scarlet/Violet con sus DLC, y si no está, Sword/Shield, BDSP, USUM… en ese
@@ -384,6 +395,7 @@ Reglas que no se negocian, porque son la tesis:
   | `src/modules/guess/ui/GuessBoard.tsx` | La misma excepción que `HangmanBoard`: cada especie es un `POST` JSON. Lleva el `Combobox` con los 1025 nombres, que son el espacio de búsqueda |
   | `src/shared/ui/NewGameButton.tsx` | `POST` que crea la partida de un modo y navega a su id. La misma excepción, compartida por los tres modos. El diario manda la fecha local del navegador, que solo el cliente conoce, y navega al número de puzzle. Fuera del diario, manda lo marcado en el `[data-game-options]` que lo contiene (las generaciones del free play), así que esa elección no necesita otro componente cliente. No es un `<form>`: sin handler de submit, se podría enviar como GET |
   | `src/modules/players/ui/NicknameForm.tsx` | `POST` del nickname y `router.refresh()`, para que el servidor dibuje la fila nueva del leaderboard. La misma excepción que los tableros: manda un dato, no lee datos |
+| `src/modules/battler/ui/DraftBoard.tsx` | La misma excepción que los tableros: cada elección, reroll y orden es un `POST` JSON, y solo tiene las ofertas de esta elección. Al ordenar el equipo, la respuesta trae el bracket (ya no es secreto) y `BracketReveal`, que no lleva directiva porque solo lo usa este archivo, lo reproduce paso a paso |
 | `src/modules/daily/ui/Countdown.tsx` | El tiempo hasta la medianoche local, que solo el navegador conoce, y un intervalo que lo actualiza. En el servidor no muestra nada, para no desentonar con la hidratación |
 
 - **Nada de widgets nativos donde haya que estilar.** Sin `<select>` ni
@@ -515,7 +527,7 @@ npm run lint      # eslint, incluye boundaries
 npm run format    # prettier --write
 npm test          # vitest
 npm run ingest    # regenera data/snapshot.json desde PokéAPI (~2.800 llamadas, unos minutos)
-npm run db:migrate # aplica db/migrations pendientes; DATABASE_URL de .env.local, o del shell si no existe
+npm run db:migrate # aplica db/migrations pendientes; DATABASE_URL del shell si está seteada (gana sobre .env.local, verificado), si no de .env.local
 npm run test:e2e  # Playwright; la primera vez, `npx playwright install chromium`
 ```
 
@@ -584,7 +596,7 @@ pasa al final, después del paso 13. Dex Clues va antes que el Battler
       cualquier combinación al terminar la campaña. Racha de free play con
       puntos (`100 + 20 × fallos que sobran + 1 por segundo bajo 180`), solo
       para el jugador.
-- [ ] **12. Dex Clues** ← en curso (ADR 0010). Stats & types rehecho; solo
+- [x] **12. Dex Clues** (#16, ADR 0010). Stats & types rehecho; solo
       cambia el nombre visible, el código sigue siendo `guess`. 10 intentos;
       por intento, tipos ✓/✗, generación, etapa, altura (m, 2 decimales) y
       peso (kg, 1 decimal) con flecha, y color ✓/✗; pistas tras el fallo 3
@@ -593,13 +605,31 @@ pasa al final, después del paso 13. Dex Clues va antes que el Battler
       `100 + 20 × intentos que sobran + 1 por segundo bajo 180`. La ronda
       diaria sigue, con el modo nuevo. La ingesta sumó color, altura, peso y
       `evolvesFrom`.
-- [ ] **13. Battler.** Draft de 6 elecciones: fácil (6 ofertas, 6 rerolls),
+- [ ] **13. Battler** ← en curso (ADR 0011). Draft de 6 elecciones: fácil (6 ofertas, 6 rerolls),
       difícil (3 y 3) y Nuzlocke secreto (se desbloquea ganando un torneo en
       difícil: 3 ofertas, sin rerolls, solo especies que no evolucionan con
       450 o más de stats base, y la que cae KO queda muerta para el resto del
       bracket). Bracket de 8, simulación propia con la fórmula exacta y las
       seis stats, sin habilidades, ítems ni estados. "No evoluciona" sale de
       `evolvesFrom` (paso 12): ninguna especie evoluciona desde ella.
+      Decidido el 2026-10-16: los rivales draftean (la mejor de 3 por stats
+      base) en difícil y Nuzlocke, y salen al azar en fácil; el equipo se
+      reordena antes del bracket, salvo en el Nuzlocke; la ingesta suma la
+      precisión, y el combate no usa `UNUSED_MOVES` (recarga, carga, el
+      usuario cae KO, condicionales, poder según el HP propio y otra stat:
+      Body Press, Foul Play). Si los dos activos no pueden dañarse, un
+      lado por vez manda el suyo al final de la fila, como un cuentakilómetros
+      (el lado 1 recorre su fila, después avanza uno el lado 0); el HP decide
+      solo cuando todos los cruces de los que quedan se trabaron.
+      Decidido el 2026-10-17: los rivales llevan nombres de líder propios
+      ("Leader Cinder"), sorteados con la semilla. El bracket se reproduce
+      apenas se ordena el equipo, un paso cada 0,5 s: los combates de los
+      líderes aparecen enteros; cada combate tuyo espera, con los equipos a
+      la vista y el log vacío, a "Begin combat", y se reproduce línea por
+      línea. "Skip" salta a tu próximo combate. El botón flota abajo, como
+      portal a `<body>`: la animación de entrada de `main > *` transforma el
+      bloque, y un ancestro transformado ata `fixed` a él en vez de a la
+      pantalla.
 - [ ] **14. Deploy.**
       - [ ] **Pablo:** deploy en Vercel con las cuatro variables, `LAUNCH_DATE`
             = día del deploy, `db:migrate` contra la base de producción,

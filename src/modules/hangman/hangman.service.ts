@@ -169,15 +169,24 @@ export async function startGame(
 
 /**
  * The player's own game and its mode, or undefined for any other id. The
- * mode is not the answer: the page needs it to offer the next game.
+ * mode is not the answer: the page needs it to offer the next game. Nor is
+ * a campaign game's generation, though it comes from the answer: a campaign
+ * game is drawn from the generation the campaign is on, which is public.
  */
 export async function getGame(
   id: string,
   playerId: string,
-): Promise<(GameView & Kind) | undefined> {
+): Promise<(GameView & Kind & { gen?: number }) | undefined> {
   const game = await load(id, playerId);
   return (
-    game && { ...view(id, game), campaign: game.campaign, gens: game.gens }
+    game && {
+      ...view(id, game),
+      campaign: game.campaign,
+      gens: game.gens,
+      ...(game.campaign && {
+        gen: generationOf(findSpecies(game.speciesSlug)!.id),
+      }),
+    }
   );
 }
 

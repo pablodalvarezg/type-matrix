@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { POST as battlerRoute } from "@app/api/battler/games/route";
 import { POST as dailyRoute } from "@app/api/daily/games/route";
 import { POST as guessRoute } from "@app/api/guess/games/route";
 import { POST as hangmanRoute } from "@app/api/hangman/games/route";
@@ -7,7 +8,7 @@ import { POST as nicknameRoute } from "@app/api/players/nickname/route";
 import { signPlayerId } from "@modules/players/domain/player-cookie";
 
 /*
- * The four routes that add rows, wired to the throttle: over the cap they
+ * The five routes that add rows, wired to the throttle: over the cap they
  * answer 429 before saving anything, and without issuing the cookie.
  */
 
@@ -59,6 +60,7 @@ describe("routes over the cap", () => {
     ["nickname", () => nicknameRoute(post({ nickname: "ash_1" }))],
     ["hangman", () => hangmanRoute(post())],
     ["guess", () => guessRoute(post())],
+    ["battler", () => battlerRoute(post({ difficulty: "easy" }))],
     ["daily", () => dailyRoute(post({ date: "2026-10-09", mode: "guess" }))],
   ])("%s answers 429 and issues no cookie", async (_, call) => {
     expect((await call()).status).toBe(429);

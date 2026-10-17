@@ -40,7 +40,7 @@ export function NewGameButton({
   body,
   label,
 }: {
-  mode: "hangman" | "guess";
+  mode: "hangman" | "guess" | "battler";
   daily?: boolean;
   body?: Record<string, unknown>;
   label: string;

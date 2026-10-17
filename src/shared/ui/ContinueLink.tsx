@@ -2,9 +2,15 @@ import Link from "next/link";
 
 /**
  * Back to the game the player has open, where a mode's page would offer a
- * new one: one game at a time, and giving up is what ends it early.
+ * new one: one game at a time.
  */
-export function ContinueLink({ href }: { href: string }) {
+export function ContinueLink({
+  href,
+  hint = "To start another, finish it or give up.",
+}: {
+  href: string;
+  hint?: string;
+}) {
   return (
     <div className="flex flex-col gap-2">
       <Link
@@ -13,9 +19,7 @@ export function ContinueLink({ href }: { href: string }) {
       >
         Continue your game
       </Link>
-      <p className="text-sm text-muted">
-        To start another, finish it or give up.
-      </p>
+      <p className="text-sm text-muted">{hint}</p>
     </div>
   );
 }
