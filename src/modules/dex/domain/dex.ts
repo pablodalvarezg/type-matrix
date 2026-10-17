@@ -73,6 +73,8 @@ export interface Move {
   type: TypeName;
   category: "physical" | "special";
   power: number;
+  /** Percent; null for a move that never misses. */
+  accuracy: number | null;
 }
 
 /**

@@ -16,6 +16,7 @@ Side project #2 of [Pablo Álvarez Graña's portfolio](https://github.com/pablod
 | **Team builder** | Builds a team of 6 and sees shared weaknesses and offensive coverage | No answer. Pure calculation |
 | **Hangman** | Guesses a species name letter by letter, while the gallows fills in: a campaign that unlocks the generations one by one, or free play with a scored streak | Server only |
 | **Dex Clues** | Guesses a species from feedback on its types, generation, evolution stage, color, height and weight, Wordle-style, with hints unlocked by misses and a scored free-play streak | Server only |
+| **Battler** | Drafts six species from server-drawn offers and plays them through an eight-team bracket, every hit by the exact damage formula: easy, hard and a secret Nuzlocke | No answer. The offers to come and the rivals stay on the server |
 | **Daily puzzle** | A Dex Clues round and a Hangman round per day, each with its own species, the same for everyone, each with its own streak and leaderboard | Server only |
 
 ### Why there is no silhouette mode
@@ -126,7 +127,7 @@ Everything has to run on free plans. The accepted cost ceiling for the whole por
 
 PokéAPI asks consumers to cache. The strongest cache is not calling it in production at all.
 
-- `scripts/ingest.ts` downloads what is needed once — species (id, English name, types, base stats, the damaging moves each one can learn, color, height, weight and the species it evolves from), moves (name, type, category, power) and the type chart — with limited concurrency to be polite. Each species gets the learnset of the most recent mainline game it appears in: Scarlet/Violet first, older games only for species that game left out.
+- `scripts/ingest.ts` downloads what is needed once — species (id, English name, types, base stats, the damaging moves each one can learn, color, height, weight and the species it evolves from), moves (name, type, category, power, accuracy) and the type chart — with limited concurrency to be polite. Each species gets the learnset of the most recent mainline game it appears in: Scarlet/Violet first, older games only for species that game left out.
 - It writes `data/snapshot.json`, which is committed. The app reads only that file, and only on the server.
 - Re-running the ingest is a manual decision, and the diff shows exactly what changed.
 - **No sprites are downloaded.** Not even to process them.
@@ -160,14 +161,15 @@ Validated with Zod in `src/shared/config/env.ts`, which makes the build fail whe
 ```
 src/
 ├─ app/                          # Routing and composition only
-│  ├─ (modes)/calculator, team, hangman, guess, daily
+│  ├─ (modes)/calculator, team, hangman, guess, battler, daily
 │  └─ api/<mode>/.../route.ts    # Thin: parse with the schema, call the service, map errors to HTTP
 ├─ modules/
 │  ├─ dex/                       # Snapshot loader (server-only), species/move/type types, type chart, generations, evolution stages
-│  ├─ battle/                    # Stats and damage. Pure domain, the most heavily tested code in the repo
+│  ├─ battle/                    # Stats, damage and the 6-vs-6 simulation. Pure domain, the most heavily tested code in the repo
 │  ├─ team/                      # Weaknesses and coverage. Pure domain
 │  ├─ hangman/                   # Masking and campaign progress (domain), game service, repository
 │  ├─ guess/                     # Dex Clues feedback and hints (domain), game service, repository
+│  ├─ battler/                   # Draft, rivals and bracket (domain), run service, repository
 │  ├─ daily/                     # Puzzle number, timezone window, seeded selection, streaks, leaderboard
 │  └─ players/                   # Cookie identity, nickname
 └─ shared/
@@ -213,6 +215,25 @@ The mode was Stats & types until step 12 ([ADR 0010](docs/adr/0010-dex-clues.md)
 - A species already guessed, or a name that is not a species, is refused and costs nothing. Ownership, concurrent guesses, one open game at a time and giving up work as in Hangman.
 - Once the game is over, the answer comes back in full.
 - The API is `POST /api/guess/games`, `POST /api/guess/games/{id}/guesses` with `{ "species": "Mr. Mime" }` (a name or slug), and `POST /api/guess/games/{id}/give-up`. Each response is the public view of the game: one row per guess with its feedback, the hints, the guesses left and the status, plus the answer once it is over.
+
+### Battler, draft and bracket
+
+Step 13 ([ADR 0011](docs/adr/0011-battler.md)). There is no answer to hide, but there is a draw to protect: every offer, rival and battle comes from a seed in the run's row that never leaves the server, so reloading the page offers the same species, and the offers to come cannot be worked out.
+
+| Difficulty | Offers per pick | Rerolls | Pool | Rivals |
+|---|---|---|---|---|
+| Easy | 6 | 6 | Every species with a damaging move the battle uses (1014) | Six at random |
+| Hard | 3 | 3 | The same | Draft too: the best of 3 by base-stat total, six times |
+| Nuzlocke | 3 | 0 | Species that evolve no further, with 450 base stats or more (500) | Draft, as on hard |
+
+- **The Nuzlocke is secret** until the player wins a tournament on hard. Its team fights in pick order, and whoever faints is gone for the rest of the bracket.
+- **A draft is six picks.** A reroll swaps every offer of the pick. Once the team is full, the player orders it (not on Nuzlocke): the first one leads, and when one faints the next comes in. Then the bracket is played at once.
+- **Eight teams, three rounds.** The player sits in a seat the seed picks; the seven rivals draft from the same pool, each under a leader name of our own ("Leader Cinder"), drawn by the seed. Teams heal between rounds.
+- **The bracket plays out right after the team is ordered**, a step every half second: the rivals' matches appear whole, one by one. Each of the player's matches waits, its two teams on screen and its log empty, for "Begin combat", then plays a log line per step, its knockouts struck as they come. "Skip" jumps to the player's next match, or to the end. That one button floats at the bottom of the screen, so the lines that keep coming never push it away. The outcome and "Play again" come at the end. Each match's winner gets a trophy (our own SVG) and a marked block. Opening a finished run shows it whole.
+- **The battle** is 6 vs 6 singles at level 50, IVs 31, no EVs, neutral natures: the damage formula above and the six stats, nothing else. Each turn, each side uses its move with the most expected damage against the one in front of it (the mean of the 16 rolls, times accuracy). The faster one moves first, and the seed breaks a speed tie. Accuracy, a 1-in-24 critical hit and the damage roll are drawn from the seed. If neither active fighter can hurt the other, one side sends its active one to the back of the line and the next comes in (the log says so), like an odometer: the rival side goes through its line, then the player's side moves on one. The HP left, as a fraction, decides only once every pairing of the fighters left has stalled.
+- **Left out of the battle**, on purpose: abilities, items, status moves, stat stages, recoil and priority. So are the damaging moves whose own rule would make that absurd, though the calculator keeps them: a recharge turn (Hyper Beam, Giga Impact), a charge turn (Solar Beam, Fly), a user that faints (Explosion), moves that fail outside a condition (Focus Punch, Sucker Punch, Fake Out), power that drops with the user's HP (Water Spout, Eruption, Dragon Energy) and another stat than the formula's (Body Press, Foul Play). Without its own rule, each would hit harder than it does.
+- **One open draft per difficulty**, with "Continue". Leaving the board never loses a draft. There is no give-up: a draft has no loss to count, and finishing it is seven requests, so a give-up would add nothing. The run, its bracket and the Nuzlocke unlock are derived from the rows, never stored.
+- The API is `POST /api/battler/games` with `{ "difficulty": "easy" }`, then `POST /api/battler/games/{id}/picks` with `{ "species": "garchomp" }` (a slug on offer), `POST /api/battler/games/{id}/rerolls`, and `POST /api/battler/games/{id}/order` with the six slugs in fighting order. Each response is the run: the picks, this pick's offers and the rerolls left, plus the played bracket once the team is ordered.
 
 ### Daily puzzle, details that are easy to miss
 
@@ -291,7 +312,7 @@ Each step ends green. There is one deploy, at close-out, once every mode exists.
 10. **Close-out.** Playwright smoke (one test per mode), responsive from 360 px.
 11. **Hangman campaign and free-play streak.** Generations unlocked by wins, free play limited to unlocked generations, a scored streak.
 12. **Dex Clues.** Stats & types reworked: ten guesses, types, generation, evolution stage, color, height and weight per guess, hints unlocked by misses and a scored free-play streak. Its daily round stays.
-13. **Battler.** A six-pick draft (easy, hard and a secret Nuzlocke) and an eight-team bracket, simulated with the exact damage formula.
+13. **Battler.** A six-pick draft (easy, hard and a secret Nuzlocke) with server-drawn offers and drafting rivals, the team ordered, and an eight-team bracket simulated with the exact damage formula. The ingest adds move accuracy.
 14. **Deploy.** Vercel with the four environment variables, Lighthouse ≥ 90 on mobile, public README with screenshots, and **measured numbers** for the case study.
 
 ### Pending decisions, with a default

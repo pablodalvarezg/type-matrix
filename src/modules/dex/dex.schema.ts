@@ -19,6 +19,7 @@ const snapshotSchema = z.object({
       type: typeName,
       category: z.enum(["physical", "special"]),
       power: z.number().int().positive(),
+      accuracy: z.number().int().min(1).max(100).nullable(),
     }),
   ),
   species: z.array(

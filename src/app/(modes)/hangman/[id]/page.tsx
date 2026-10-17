@@ -38,7 +38,9 @@ export default async function GamePage({ params }: PageProps<"/hangman/[id]">) {
           ← Hangman
         </Link>
         <h1 className="text-3xl font-bold">
-          {game.campaign ? "Hangman campaign" : "Hangman"}
+          {game.gen
+            ? `Hangman campaign: ${GENERATION_NAMES[game.gen - 1]}`
+            : "Hangman"}
         </h1>
       </header>
       <HangmanBoard key={game.id} initial={game}>

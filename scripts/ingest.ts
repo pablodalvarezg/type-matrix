@@ -88,6 +88,8 @@ const moveSchema = z.object({
   type: named,
   damage_class: named,
   power: z.number().int().nullable(),
+  // Null for a move that never misses (Swift, Aerial Ace).
+  accuracy: z.number().int().nullable(),
   // Some newer moves come without meta at all (Population Bomb).
   meta: z.object({ min_hits: z.number().int().nullable() }).nullish(),
 });
@@ -218,6 +220,8 @@ async function main() {
       type: m.type.name,
       category: m.damage_class.name,
       power: m.power,
+      // PokéAPI gives Tachyon Cutter, which never misses, an accuracy of 0.
+      accuracy: m.accuracy || null,
     }));
   const kept = new Set(moves.map((m) => m.slug));
 

@@ -26,6 +26,11 @@ const modes = [
     href: "/guess",
   },
   {
+    name: "Battler",
+    blurb: "Draft six and play them through an eight-team bracket.",
+    href: "/battler",
+  },
+  {
     name: "Daily puzzle",
     blurb: "A Dex Clues and a Hangman round a day, the same for everyone.",
     href: "/daily",
